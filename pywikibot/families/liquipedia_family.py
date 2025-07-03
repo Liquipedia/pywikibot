@@ -11,6 +11,9 @@ class Family(family.Family):
     @classmethod
     def __post_init__(self):
         response = requests.get('https://liquipedia.net/api.php?action=listwikis', headers={'accept-encoding': 'gzip'})
+        if response.status_code != 200:
+                print(response.text)
+                return
         wikis = json.loads(response.content)
         for game in wikis['allwikis'].keys():
             self.langs[game] = 'liquipedia.net'

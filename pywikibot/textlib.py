@@ -368,6 +368,43 @@ def get_regexes(
     return result
 
 
+def getID( i ):
+    from random import seed
+    from random import randint
+    import time
+
+    seed( int(time.time()) + i )
+
+    id = ''
+
+    for _ in range(10):
+        value = randint(1, 62)
+        if value <= 10:
+            id = id + str(value - 1)
+        elif value <= 36:
+            id = id + chr(value + 54)
+        else:
+            id = id + chr(value + 60)
+
+    if not checkUnique(id):
+        id = getID( i + 100 )
+
+    with open('idCache\idList.txt', 'a') as idList:
+        idList.write('\n' + id)
+
+    return id
+
+def checkUnique( id ):
+    #open ID List
+    with open('idCache\idList.txt', 'r') as read_obj:
+        #read all lines
+        for line in read_obj:
+            if id in line:
+                return False
+
+    return True
+
+
 def replaceExcept(text: str,
                   old: str | Pattern[str],
                   new: str | Callable[[Match[str]], str],
@@ -376,7 +413,8 @@ def replaceExcept(text: str,
                   allowoverlap: bool = False,
                   marker: str = '',
                   site: pywikibot.site.BaseSite | None = None,
-                  count: int = 0) -> str:
+                  count: int = 0,
+                  appendid: bool = False) -> str:
     """Return text with *old* replaced by *new*, ignoring specified text types.
 
     Skip occurrences of *old* within *exceptions*; e.g. within nowiki
@@ -473,7 +511,10 @@ def replaceExcept(text: str,
                 last = group_match.end()
             replacement += new[last:]
 
-        text = text[:match.start()] + replacement + text[match.end():]
+        if appendid:
+            idText = getID( replaced )
+
+        text = text[:match.start()] + replacement + idText + text[match.end():]
 
         # continue the search on the remaining text
         if allowoverlap:

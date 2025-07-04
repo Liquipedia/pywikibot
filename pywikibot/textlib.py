@@ -389,14 +389,14 @@ def getID( i ):
     if not checkUnique(id):
         id = getID( i + 100 )
 
-    with open('idCache\idList.txt', 'a') as idList:
+    with open('idCache/idList.txt', 'a') as idList:
         idList.write('\n' + id)
 
     return id
 
 def checkUnique( id ):
     #open ID List
-    with open('idCache\idList.txt', 'r') as read_obj:
+    with open('idCache/idList.txt', 'r') as read_obj:
         #read all lines
         for line in read_obj:
             if id in line:

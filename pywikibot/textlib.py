@@ -395,6 +395,11 @@ def getID( i ):
     return id
 
 def checkUnique( id ):
+    import os
+    # if idList.txt doesn't exist create it
+    if not os.path.exists('/idCache/idList.txt'):
+        with open('idCache/idList.txt', 'x'): pass
+
     #open ID List
     with open('idCache/idList.txt', 'r') as read_obj:
         #read all lines

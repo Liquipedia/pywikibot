@@ -28,7 +28,7 @@ where action can be one of these
 :both:         Both of the above. Retrieves redirect pages from live wiki,
                not from a special page.
 
-:user:         Tries to delete redirects into user space.
+:deleteuser:   Tries to delete redirects into user space.
                If the user does not have admin rights it adds `[[Category:Redirects into user space]]` to the pages.
                Please only use with namespace parameter, e.g. `-ns:0` for main space.
 
@@ -140,7 +140,7 @@ class RedirectGenerator(OptionHandler):
         cls = self.__class__
         if action == 'double':
             cls.__iter__ = lambda slf: slf.retrieve_double_redirects()
-        elif action == 'user':
+        elif action == 'deleteuser':
             cls.__iter__ = lambda slf: slf.retrieve_redirects_into_user_space()
         elif action == 'broken':
             cls.__iter__ = lambda slf: slf.retrieve_broken_redirects()
@@ -429,7 +429,7 @@ class RedirectRobot(ExistingPageBot):
             self.treat_page = self.fix_1_double_redirect
         elif action == 'broken':
             self.treat_page = self.delete_1_broken_redirect
-        elif action == 'user':
+        elif action == 'deleteuser':
             self.treat_page = self.delete_1_user_redirect
         elif action == 'both':
             self.treat_page = self.fix_double_or_delete_broken_redirect
@@ -764,7 +764,7 @@ def main(*args: str) -> None:
         # bot options
         if arg in shorts:
             action = shorts[arg]
-        elif arg in ('both', 'broken', 'double', 'user'):
+        elif arg in ('both', 'broken', 'double', 'deleteuser'):
             action = arg
         elif option in ('always', 'delete'):
             options[option] = True

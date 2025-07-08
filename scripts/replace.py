@@ -104,6 +104,8 @@ Furthermore, the following command line parameters are supported:
 
 -appendid         append a matchgroup id after each replacement (used for bracket conversions)
 
+-bottomtext       text to add at the bottom of the page
+
 
 *Replacement parameters*
     Replacement parameters are pairs of arguments given to the script.
@@ -569,6 +571,7 @@ class ReplaceRobot(SingleSiteBot, ExistingPageBot):
             'sleep': 0.0,
             'summary': None,
             'appendid': False,
+            'bottomtext': None,
         })
         super().__init__(generator=generator, **kwargs)
 
@@ -738,6 +741,9 @@ class ReplaceRobot(SingleSiteBot, ExistingPageBot):
                 cats.append(self.opt.addcat)
                 new_text = textlib.replaceCategoryLinks(new_text, cats,
                                                         site=page.site)
+
+        if self.opt.bottomtext:
+            new_text += '\n' + self.opt.bottomtext
 
         context = 0
         while True:
@@ -996,6 +1002,8 @@ def main(*args: str) -> None:
             file_replacements = handle_pairsfile(value)
         elif opt == '-nopreload':
             preload = False
+        elif opt == '-bottomtext':
+            options['bottomtext'] = value
         else:
             commandline_replacements.append(arg)
 

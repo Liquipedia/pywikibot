@@ -1566,9 +1566,10 @@ class LPDBGenerator(GeneratorWrapper):
         :raises APIError: error response from LPDB
         """
         url = f'https://api.liquipedia.net/api/v3/{self.lpdb_table}'
-        assert os.environ.get('LPDB_API_KEY'), "Environment variable LPDB_API_KEY is required."
+        apikey = os.environ.get('LPDB_API_KEY', config.lpdb_api_key)
+        assert apikey, "LPDB API key is required. Set 'lpdb_api_key' in your config or LPDB_API_KEY in your environment."
         headers = {
-            'Authorization': f"Apikey {os.environ.get('LPDB_API_KEY')}"
+            'Authorization': f"Apikey {apikey}"
         }
 
         while True:

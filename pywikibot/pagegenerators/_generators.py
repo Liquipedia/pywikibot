@@ -1530,7 +1530,6 @@ class LPDBGenerator(GeneratorWrapper):
         :param conditions: Conditions to select entries from the LPDB table
         :param site: Site to operate on
             (default is the default site from the user config)
-        :param extra_options: Dictionary of extra options to use (optional)
         """
         if site is None:
             site = pywikibot.Site()
@@ -1546,8 +1545,8 @@ class LPDBGenerator(GeneratorWrapper):
         :return: Dictionary of querystring parameters to use in the query
         """
 
-        pywikibot.output(f"Querying LPDB {self.lpdb_table} on {self.site.code} with")
-        pywikibot.output(conditions)
+        pywikibot.info(f"Querying LPDB {self.lpdb_table} on {self.site.code} with")
+        pywikibot.info(conditions)
 
         query = {
             'wiki': self.site.code,

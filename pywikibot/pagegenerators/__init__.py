@@ -445,7 +445,7 @@ GENERATOR OPTIONS
 
 -lpdbtable          Select a specific LPDB table to fetch pagenames from.
                     Requires a valid LPDB API key set in environment variable
-                    ``LPDB_API_KEY``.
+                    ``LPDB_API_KEY`` or set as ``lpdb_api_key`` in ``user_config.py``.
 
 -lpdbconditions     Conditions used when fetching the ``-lpdbtable``.
 

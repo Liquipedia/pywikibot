@@ -184,10 +184,15 @@ class DeletionRobot(CurrentPageBot):
         """Skip the page under some conditions."""
         """Skip files with global usage"""
         if not self.opt.undelete and page.exists() and not self.opt.ignoreusage:
-            global_usage = page.site.simple_request(action='query', prop='globalusage', titles=page.title()).submit()
-            if len(global_usage['query']['pages'][str(page.pageid)]['globalusage']) > 0:
-                pywikibot.info(f'Skipping: {page} has global usage.')
-                return True
+            if page.namespace() == Namespace.FILE:
+                global_usage = page.site.simple_request(action='query', prop='globalusage', titles=page.title()).submit()
+                if len(global_usage['query']['pages'][str(page.pageid)]['globalusage']) > 0:
+                    pywikibot.info(f'Skipping: {page} has global usage.')
+                    return True
+            if str(page.site) == 'liquipedia:commons' and '/dev/' not in str(page.title()):
+                # do the check here too ... just working for non files ...
+                    pywikibot.info(f'Skipping: {page} has global usage.')
+                    return True
         if self.opt.undelete and page.exists():
             pywikibot.info(f'Skipping: {page} already exists.')
             return True

@@ -10,7 +10,7 @@ class Family(family.Family):
 
     @classmethod
     def __post_init__(self):
-        response = requests.get('https://liquipedia.net/api.php?action=listwikis', headers={'accept-encoding': 'gzip'})
+        response = requests.get('https://liquipedia.net/api.php', headers={'accept-encoding': 'gzip'})
         if response.status_code != HTTPStatus.OK:
             print(response.text)
             return

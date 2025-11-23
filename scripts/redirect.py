@@ -32,6 +32,8 @@ where action can be one of these
                If the user does not have admin rights it adds `[[Category:Redirects into user space]]` to the pages.
                Please only use with namespace parameter, e.g. `-ns:0` for main space.
 
+:removeprefix:   Adjusts redirects that link to pages with a certain prefix.
+
 and arguments can be:
 
 -xml           Retrieve information from a local XML dump
@@ -123,6 +125,7 @@ class RedirectGenerator(OptionHandler):
     available_options = {
         'fullscan': False,
         'moves': False,
+        'prefix': '',
         'namespaces': {0},
         'offset': -1,
         'start': None,
@@ -142,6 +145,8 @@ class RedirectGenerator(OptionHandler):
             cls.__iter__ = lambda slf: slf.retrieve_double_redirects()
         elif action == 'deleteuser':
             cls.__iter__ = lambda slf: slf.retrieve_redirects_into_user_space()
+        elif action == 'removeprefix':
+            cls.__iter__ = lambda slf: slf.retrieve_redirects_with_prefix()
         elif action == 'broken':
             cls.__iter__ = lambda slf: slf.retrieve_broken_redirects()
         elif action == 'both':
@@ -344,6 +349,23 @@ class RedirectGenerator(OptionHandler):
                 if self.opt.limit and count >= self.opt.limit:
                     break
 
+    def retrieve_redirects_with_prefix(self) -> Generator[
+            str | pywikibot.Page]:
+        """Retrieve redirects linking to pages starting with a certain prefix."""
+        count = 0
+        for pagetitle, type_, target, final in self.get_redirects_via_api(getall=True):
+            pywikibot.info(f'\ntarget: {target}...')
+            x = target.startswith(self.opt.prefix)
+            if self.opt.namespaces and pywikibot.Page(
+                    self.site,
+                    pagetitle).namespace() not in self.opt.namespaces:
+                continue
+            elif (x == True):
+                yield pagetitle
+                count += 1
+                if self.opt.limit and count >= self.opt.limit:
+                    break
+
     def retrieve_double_redirects(self) -> Generator[
             str | pywikibot.Page]:
         """Retrieve double redirects."""
@@ -419,6 +441,7 @@ class RedirectRobot(ExistingPageBot):
         'limit': float('inf'),
         'delete': False,
         'sdtemplate': '',
+        'prefix': '',
     }
 
     def __init__(self, action, **kwargs) -> None:
@@ -431,6 +454,8 @@ class RedirectRobot(ExistingPageBot):
             self.treat_page = self.delete_1_broken_redirect
         elif action == 'deleteuser':
             self.treat_page = self.delete_1_user_redirect
+        elif action == 'removeprefix':
+            self.treat_page = self.fix_1_prefix_redirect
         elif action == 'both':
             self.treat_page = self.fix_double_or_delete_broken_redirect
         else:
@@ -575,6 +600,16 @@ class RedirectRobot(ExistingPageBot):
         """Delete one user redirect."""
         redir_page = self.current_page
         self.delete_redirect(redir_page, 'deleting redirects into user space', touserspace=True)
+
+    def fix_1_prefix_redirect(self) -> None:
+        """Removes the specified prefix from the current redirect target"""
+        redir_page = self.current_page
+        oldText = redir_page.get(get_redirect=True)
+        newText = oldText.replace('[' + self.opt.prefix, '[')
+        summary = 'bot: remove prefix "' + self.opt.prefix + '" in redirects'
+        self.userPut(redir_page, oldText, newText, summary=summary,
+            ignore_save_related_errors=True,
+            ignore_server_errors=True)
 
     def delete_1_broken_redirect(self) -> None:
         """Treat one broken redirect."""
@@ -764,10 +799,13 @@ def main(*args: str) -> None:
         # bot options
         if arg in shorts:
             action = shorts[arg]
-        elif arg in ('both', 'broken', 'double', 'deleteuser'):
+        elif arg in ('both', 'broken', 'double', 'deleteuser', 'removeprefix'):
             action = arg
         elif option in ('always', 'delete'):
             options[option] = True
+        elif option == 'prefix':
+            options[option] = value or pywikibot.input(
+                'Which prefix should be removed?')
         elif option == 'sdtemplate':
             options['sdtemplate'] = value or pywikibot.input(
                 'Which speedy deletion template to use?')

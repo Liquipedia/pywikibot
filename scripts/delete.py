@@ -16,8 +16,9 @@ Furthermore, the following command line parameters are supported:
 -undelete      Actually undelete pages instead of deleting. Obviously
                makes sense only with -page and -file.
 
--ignoreusage   By default deletion will skipfiles that have global usage.
+-ignoreusage   By default deletion will skip files that have global usage.
                Setting this param will ignore that check and delete them anyways.
+               For non-file pages, no check is performed.
 
 -isorphan      Alert if there are pages that link to page to be deleted
                (check 'What links here'). By default it is active and

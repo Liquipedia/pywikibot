@@ -16,7 +16,7 @@ Furthermore, the following command line parameters are supported:
 -undelete      Actually undelete pages instead of deleting. Obviously
                makes sense only with -page and -file.
 
--ignoreusage   By default deletion will skip pages that have global usage.
+-ignoreusage   By default deletion will skipfiles that have global usage.
                Setting this param will ignore that check and delete them anyways.
 
 -isorphan      Alert if there are pages that link to page to be deleted
@@ -189,10 +189,8 @@ class DeletionRobot(CurrentPageBot):
                 if len(global_usage['query']['pages'][str(page.pageid)]['globalusage']) > 0:
                     pywikibot.info(f'Skipping: {page} has global usage.')
                     return True
-            if str(page.site) == 'liquipedia:commons' and '/dev/' not in str(page.title()):
-                # do the check here too ... just working for non files ...
-                    pywikibot.info(f'Skipping: {page} has global usage.')
-                    return True
+            # for non files there is no api endpoint to check global usage
+            # if such an endpoint gets added in the future we should add an according check here too
         if self.opt.undelete and page.exists():
             pywikibot.info(f'Skipping: {page} already exists.')
             return True

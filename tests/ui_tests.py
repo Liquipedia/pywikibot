@@ -10,9 +10,12 @@ from __future__ import annotations
 import io
 import logging
 import os
+import platform
 import unittest
-from contextlib import redirect_stdout, suppress
+from contextlib import nullcontext, redirect_stdout, suppress
+from functools import partial
 from typing import NoReturn
+from unicodedata import normalize
 from unittest.mock import patch
 
 import pywikibot
@@ -26,12 +29,17 @@ from pywikibot.bot import (
     VERBOSE,
     WARNING,
 )
+from pywikibot.tools import suppress_warnings
 from pywikibot.userinterfaces import (
     terminal_interface_base,
     terminal_interface_unix,
     terminal_interface_win32,
 )
-from pywikibot.userinterfaces.transliteration import NON_LATIN_DIGITS, _trans
+from pywikibot.userinterfaces.transliteration import (
+    NON_ASCII_DIGITS,
+    Transliterator,
+    _trans,
+)
 from tests.aspects import TestCase, TestCaseBase
 
 
@@ -49,7 +57,7 @@ class UITestCase(TestCaseBase):
     net = False
 
     def setUp(self) -> None:
-        """Setup test.
+        """Set up test.
 
         Here we patch standard input, output, and errors, essentially
         redirecting to `StringIO` streams.
@@ -185,10 +193,7 @@ class TestTerminalOutput(UITestCase):
         self.assertEqual(stderrlines[1], 'Traceback (most recent call last):')
         self.assertEqual(stderrlines[3],
                          "    raise ExceptionTestError('Testing Exception')")
-
-        end_str = ': Testing Exception'
-        self.assertTrue(stderrlines[-1].endswith(end_str),
-                        f'\n{stderrlines[-1]!r} does not end with {end_str!r}')
+        self.assertEndsWith(stderrlines[-1], ': Testing Exception')
 
 
 class TestTerminalInput(UITestCase):
@@ -208,13 +213,21 @@ class TestTerminalInput(UITestCase):
         self.assertEqual(returned, 'input to read')
 
     def test_input_yn(self) -> None:
-        self.strin.write('\n')
-        self.strin.seek(0)
-        returned = pywikibot.input_yn('question', False, automatic_quit=False)
+        if platform.python_implementation() == 'PyPy':
+            context = suppress_warnings(r'subprocess \d+ is still running',
+                                        ResourceWarning)
+        else:
+            context = nullcontext()
+        with context:
+            self.strin.write('\n')
+            self.strin.seek(0)
+            returned = pywikibot.input_yn('question', False,
+                                          automatic_quit=False)
 
-        self.assertEqual(self.strout.getvalue(), '')
-        self.assertEqual(self.strerr.getvalue(), 'question ([y]es, [N]o): ')
-        self.assertFalse(returned)
+            self.assertEqual(self.strout.getvalue(), '')
+            self.assertEqual(self.strerr.getvalue(),
+                             'question ([y]es, [N]o): ')
+            self.assertFalse(returned)
 
     def _call_input_choice(self):
         rv = pywikibot.input_choice(
@@ -245,12 +258,18 @@ class TestTerminalInput(UITestCase):
         self.assertEqual(returned, 'n')
 
     def testInputChoiceNonCapital(self) -> None:
-        self.strin.write('n\n')
-        self.strin.seek(0)
-        returned = self._call_input_choice()
+        if platform.python_implementation() == 'PyPy':
+            context = suppress_warnings(r'subprocess \d+ is still running',
+                                        ResourceWarning)
+        else:
+            context = nullcontext()
+        with context:
+            self.strin.write('n\n')
+            self.strin.seek(0)
+            returned = self._call_input_choice()
 
-        self.assertEqual(self.strerr.getvalue(), self.input_choice_output)
-        self.assertEqual(returned, 'n')
+            self.assertEqual(self.strerr.getvalue(), self.input_choice_output)
+            self.assertEqual(returned, 'n')
 
     def testInputChoiceIncorrectAnswer(self) -> None:
         self.strin.write('X\nN\n')
@@ -353,25 +372,44 @@ class TestTransliterationUnix(UITestCase):
             '\x1b[93mu\x1b[0m\x1b[93me\x1b[0m\x1b[93mo\x1b[0m\n')
 
 
-class TestTransliterationTable(TestCase):
+class TestTransliteration(TestCase):
 
     """Test transliteration table."""
 
     net = False
 
-    def test_latin_digits(self) -> None:
-        """Test that non latin digits are in transliteration table."""
-        for lang, digits in NON_LATIN_DIGITS.items():
+    @classmethod
+    def setUpClass(cls) -> None:
+        """Set up Transliterator function."""
+        trans = Transliterator('ascii')
+        cls.t = staticmethod(partial(trans.transliterate, prev='P'))
+
+    def test_ascii_digits(self) -> None:
+        """Test that non ascii digits are in transliteration table."""
+        for lang, digits in NON_ASCII_DIGITS.items():
             with self.subTest(lang=lang):
-                for char in digits:
+                for i, char in enumerate(digits):
+                    self.assertTrue(char.isdigit())
+                    self.assertFalse(char.isascii())
                     self.assertIn(char, _trans,
                                   f'{char!r} not in transliteration table')
+                    self.assertEqual(self.t(char), str(i))
 
     def test_transliteration_table(self) -> None:
         """Test transliteration table consistency."""
         for k, v in _trans.items():
             with self.subTest():
                 self.assertNotEqual(k, v)
+
+    def test_transliterator(self) -> None:
+        """Test Transliterator."""
+        for char in 'äöü':
+            self.assertEqual(self.t(char), normalize('NFD', char)[0] + 'e')
+        self.assertEqual(self.t('1'), '?')
+        self.assertEqual(self.t('◌'), 'P')
+        self.assertEqual(self.t('ッ'), '?')
+        self.assertEqual(self.t('仝'), 'P')
+        self.assertEqual(self.t('ຫ'), 'h')
 
 
 # TODO: add tests for background colors.

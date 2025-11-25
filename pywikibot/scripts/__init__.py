@@ -2,10 +2,11 @@
 
 .. versionadded:: 7.0
 .. versionremoved:: 9.4
-   ``preload_sites`` script was removed (:phab:`T348925`).
+   ``preload_sites`` script, previously added in release 6.0
+   (:phab:`T226157`), was removed (:phab:`T348925`).
 """
 #
-# (C) Pywikibot team, 2021-2022
+# (C) Pywikibot team, 2021-2025
 #
 # Distributed under the terms of the MIT license.
 #
@@ -27,6 +28,6 @@ def _import_with_no_user_config(*import_args):
     # Reset this flag
     if not orig_no_user_config:
         del environ['PYWIKIBOT_NO_USER_CONFIG']
-    else:
+    else:  # pragma: no cover
         environ['PYWIKIBOT_NO_USER_CONFIG'] = orig_no_user_config
     return result

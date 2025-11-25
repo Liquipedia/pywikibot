@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Tests for archivebot scripts."""
 #
-# (C) Pywikibot team, 2014-2024
+# (C) Pywikibot team, 2014-2025
 #
 # Distributed under the terms of the MIT license.
 #
@@ -94,15 +94,22 @@ class TestArchiveBotFunctions(TestCase):
 
     def test_str2size_failures(self) -> None:
         """Test for rejecting of invalid shorthand notation of sizes."""
-        with self.assertRaises(archivebot.MalformedConfigError):
+        with self.assertRaisesRegex(
+                archivebot.MalformedConfigError, "Couldn't parse size: 4 KK"):
             archivebot.str2size('4 KK')
-        with self.assertRaises(archivebot.MalformedConfigError):
+        with self.assertRaisesRegex(
+                archivebot.MalformedConfigError, "Couldn't parse size: K4"):
             archivebot.str2size('K4')
-        with self.assertRaises(archivebot.MalformedConfigError):
+        with self.assertRaisesRegex(
+                archivebot.MalformedConfigError, "Couldn't parse size: 4X"):
             archivebot.str2size('4X')
-        with self.assertRaises(archivebot.MalformedConfigError):
+        with self.assertRaisesRegex(
+                archivebot.MalformedConfigError,
+                "Couldn't parse size: 1 234 56"):
             archivebot.str2size('1 234 56')
-        with self.assertRaises(archivebot.MalformedConfigError):
+        with self.assertRaisesRegex(
+                archivebot.MalformedConfigError,
+                "Couldn't parse size: 1234 567"):
             archivebot.str2size('1234 567')
 
 
@@ -123,15 +130,15 @@ class TestArchiveBot(TestCase):
         talk = archivebot.DiscussionPage(page, None)
         self.assertIsInstance(talk.archives, dict)
         self.assertIsInstance(talk.archived_threads, int)
-        self.assertTrue(talk.archiver is None)
+        self.assertIsNone(talk.archiver)
         self.assertIsInstance(talk.header, str)
         self.assertIsInstance(talk.timestripper, TimeStripper)
 
         self.assertIsInstance(talk.threads, list)
         self.assertGreaterEqual(
             len(talk.threads), THREADS[code],
-            f'{len(talk.threads)} Threads found on {talk},\n{THREADS[code]} or'
-            ' more expected'
+            f'{len(talk.threads)} Threads found on {talk},\n'
+            f'{THREADS[code]} or more expected'
         )
 
         for thread in talk.threads:
@@ -182,7 +189,7 @@ class TestArchiveBotAfterDateUpdate(TestCase):
         talk = archivebot.DiscussionPage(page, None)
         self.assertIsInstance(talk.archives, dict)
         self.assertIsInstance(talk.archived_threads, int)
-        self.assertTrue(talk.archiver is None)
+        self.assertIsNone(talk.archiver)
         self.assertIsInstance(talk.header, str)
         self.assertIsInstance(talk.timestripper, TimeStripper)
 
@@ -344,7 +351,9 @@ class TestPageArchiverObject(TestCase):
         except Error as e:  # pragma: no cover
             self.fail(f'PageArchiver() raised {e}!')
 
-        with self.assertRaises(archivebot.MissingConfigError):
+        with self.assertRaisesRegex(
+                archivebot.MissingConfigError,
+                'Missing or malformed template'):
             archivebot.PageArchiver(page, tmpl_without_ns, '')
 
 

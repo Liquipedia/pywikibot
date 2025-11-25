@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Test for site detection."""
 #
-# (C) Pywikibot team, 2014-2024
+# (C) Pywikibot team, 2014-2025
 #
 # Distributed under the terms of the MIT license.
 #
@@ -61,10 +61,7 @@ class MediaWikiSiteTestCase(SiteDetectionTestCase):
     standard_version_sites = (
         'http://www.ck-wissen.de/ckwiki/index.php?title=$1',
         'http://en.citizendium.org/wiki/$1',
-        # Server that hosts www.wikichristian.org is unreliable - it
-        # occasionally responding with 500 error (see: T151368).
         'http://www.wikichristian.org/index.php?title=$1',
-        'http://kb.mozillazine.org/$1'  # 1.40.1
     )
 
     non_standard_version_sites = (
@@ -106,7 +103,11 @@ class MediaWikiSiteTestCase(SiteDetectionTestCase):
     def test_standard_version_sites(self) -> None:
         """Test detection of standard MediaWiki sites."""
         for url in self.standard_version_sites:
-            with self.subTest(url=urlparse(url).netloc):
+            nl = urlparse(url).netloc
+            with self.subTest(url=nl):
+                if os.getenv('GITHUB_ACTIONS') and nl == 'en.citizendium.org':
+                    self.skipTest('Skip test on github due to T404583')
+
                 self.assertSite(url)
 
     def test_proofreadwiki(self) -> None:
@@ -196,7 +197,7 @@ class PrivateWikiTestCase(PatchingTestCase):
     @PatchingTestCase.patched(pywikibot, 'input')
     def input(self, question, *args, **kwargs):
         """Patched version of pywikibot.input."""
-        self.assertTrue(question.endswith('username?'))
+        self.assertEndsWith(question, 'username?')
         return self.USERNAME
 
     @PatchingTestCase.patched(pywikibot, 'Site')
@@ -227,7 +228,7 @@ class PrivateWikiTestCase(PatchingTestCase):
         """
         site = MWSite(self._weburl)
         self.assertIsInstance(site, MWSite)
-        self.assertTrue(hasattr(site, 'lang'))
+        self.assertHasAttr(site, 'lang')
         self.assertEqual(site.lang, self.LANG)
 
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Tests for the proofreadpage module."""
 #
-# (C) Pywikibot team, 2015-2024
+# (C) Pywikibot team, 2015-2025
 #
 # Distributed under the terms of the MIT license.
 #
@@ -75,8 +75,10 @@ class TestPagesTagParser(TestCase):
 
     def test_tag_attr_exceptions(self) -> None:
         """Test TagAttr for Exceptions."""
-        self.assertRaises(ValueError, TagAttr, 'fromsection', 'A123"')
-        self.assertRaises(TypeError, TagAttr, 'fromsection', 3.0)
+        with self.assertRaisesRegex(ValueError, 'has wrong quotes'):
+            TagAttr('fromsection', 'A123"')
+        with self.assertRaisesRegex(TypeError, 'must be str or int'):
+            TagAttr('fromsection', 3.0)
 
     def test_pages_tag_parser(self) -> None:
         """Test PagesTagParser."""
@@ -110,14 +112,13 @@ class TestPagesTagParser(TestCase):
 
     def test_pages_tag_parser_exceptions(self) -> None:
         """Test PagesTagParser Exceptions."""
-        text = """Text: <pages index="Index.pdf />"""
-        self.assertRaises(ValueError, PagesTagParser, text)
-
-        text = """Text: <pages index="Index.pdf' />"""
-        self.assertRaises(ValueError, PagesTagParser, text)
+        text = """Text: <pages index="Index.pdf" />"""
+        parser = PagesTagParser(text)
+        self.assertEqual(parser.index, 'Index.pdf')
 
         text = """Text: <pages index="Index.pdf from=C" />"""
-        self.assertRaises(ValueError, PagesTagParser, text)
+        with self.assertRaisesRegex(ValueError, 'has wrong quotes'):
+            PagesTagParser(text)
 
 
 class TestProofreadPageInvalidSite(TestCase):
@@ -142,11 +143,11 @@ class TestBasePageMethodsProofreadPage(BasePageMethodsTestBase):
     family = 'wikisource'
     code = 'en'
 
-    def setUp(self) -> None:
-        """Set up test case."""
+    def setup_page(self) -> None:
+        """Set up test page."""
         self._page = ProofreadPage(
-            self.site, 'Page:Popular Science Monthly Volume 1.djvu/12')
-        super().setUp()
+            self.site, 'Page:Popular Science Monthly Volume 1.djvu/12'
+        )
 
     def test_basepage_methods(self) -> None:
         """Test ProofreadPage methods inherited from superclass BasePage."""
@@ -162,11 +163,10 @@ class TestLoadRevisionsCachingProofreadPage(
     family = 'wikisource'
     code = 'en'
 
-    def setUp(self) -> None:
-        """Set up test case."""
+    def setup_page(self) -> None:
+        """Set up test page."""
         self._page = ProofreadPage(
             self.site, 'Page:Popular Science Monthly Volume 1.djvu/12')
-        super().setUp()
 
     def test_page_text(self) -> None:
         """Test site.loadrevisions() with Page.text."""
@@ -343,7 +343,7 @@ class TestProofreadPageValidSite(TestCase):
     def test_div_in_footer(self) -> None:
         """Test ProofreadPage page parsing functions."""
         page = ProofreadPage(self.site, self.div_in_footer['title'])
-        self.assertTrue(page.footer.endswith('</div>'))
+        self.assertEndsWith(page.footer, '</div>')
 
     def test_decompose_recompose_text(self) -> None:
         """Test ProofreadPage page decomposing/composing text."""
@@ -500,7 +500,7 @@ class TestPageOCR(BS4TestCase):
         """Test page.ocr(ocr_tool='wmfOCR')."""
         try:
             text = self.page.ocr(ocr_tool='wmfOCR')
-        except Exception as exc:
+        except Exception as exc:  # pragma: no cover
             self.assertIsInstance(exc, ValueError)
         else:
             ref_text = self.data['wmfOCR']
@@ -543,7 +543,7 @@ class TestProofreadPageIndexProperty(BS4TestCase):
 
         # Test deleter
         del page.index
-        self.assertFalse(hasattr(page, '_index'))
+        self.assertNotHasAttr(page, '_index')
         # Test setter with wrong type.
         with self.assertRaises(TypeError):
             page.index = 'invalid index'
@@ -637,11 +637,10 @@ class TestBasePageMethodsIndexPage(BS4TestCase, BasePageMethodsTestBase):
     family = 'wikisource'
     code = 'en'
 
-    def setUp(self) -> None:
-        """Set up test case."""
+    def setup_page(self) -> None:
+        """Set up test page."""
         self._page = IndexPage(
             self.site, 'Index:Popular Science Monthly Volume 1.djvu')
-        super().setUp()
 
     def test_basepage_methods(self) -> None:
         """Test IndexPage methods inherited from superclass BasePage."""
@@ -657,11 +656,10 @@ class TestLoadRevisionsCachingIndexPage(BS4TestCase,
     family = 'wikisource'
     code = 'en'
 
-    def setUp(self) -> None:
-        """Set up test case."""
+    def setup_page(self) -> None:
+        """Set up test page."""
         self._page = IndexPage(
             self.site, 'Index:Popular Science Monthly Volume 1.djvu')
-        super().setUp()
 
     def test_page_text(self) -> None:
         """Test site.loadrevisions() with Page.text."""
@@ -793,11 +791,6 @@ class TestIndexPageMappings(BS4TestCase):
             self.assertEqual(index_page.get_page_number_from_label(str(label)),
                              num_set)
 
-        # Error if label does not exists.
-        label, num_set = 'dummy label', []
-        with self.assertRaises(KeyError):
-            index_page.get_page_number_from_label('dummy label')
-
         # Test get_page_from_label.
         for label, page_set in data['get_page']:
             # Get set of pages from label with label as int or str.
@@ -805,10 +798,6 @@ class TestIndexPageMappings(BS4TestCase):
                              page_set)
             self.assertEqual(index_page.get_page_from_label(str(label)),
                              page_set)
-
-        # Error if label does not exists.
-        with self.assertRaises(KeyError):
-            index_page.get_page_from_label('dummy label')
 
         # Test get_page.
         for n in num_set:
@@ -819,6 +808,10 @@ class TestIndexPageMappings(BS4TestCase):
         for p in page_set:
             n = index_page.get_number(p)
             self.assertEqual(index_page.get_page(n), p)
+
+        # Error if label does not exists.
+        with self.assertRaises(KeyError):
+            index_page.get_page_number_from_label('dummy label')
 
     def test_page_gen(self, key) -> None:
         """Test Index page generator."""

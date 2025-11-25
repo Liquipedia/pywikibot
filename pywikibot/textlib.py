@@ -8,9 +8,11 @@ from __future__ import annotations
 
 import itertools
 import re
+import sys
 from collections import OrderedDict
 from collections.abc import Sequence
 from contextlib import closing, suppress
+from dataclasses import dataclass
 from html.parser import HTMLParser
 from typing import NamedTuple
 
@@ -24,12 +26,13 @@ from pywikibot.exceptions import InvalidTitleError, SiteDefinitionError
 from pywikibot.family import Family
 from pywikibot.time import TZoneFixedOffset
 from pywikibot.tools import (
+    ModuleDeprecationWrapper,
     deprecated,
     deprecated_args,
     first_lower,
     first_upper,
 )
-from pywikibot.userinterfaces.transliteration import NON_LATIN_DIGITS
+from pywikibot.userinterfaces.transliteration import NON_ASCII_DIGITS
 
 
 try:
@@ -71,18 +74,25 @@ NESTED_TEMPLATE_REGEX = re.compile(r"""
 (?P<unhandled_depth>{{\s*[^{\|#0-9][^{\|#]*?\s* [^{]* {{ .* }})
 """, re.VERBOSE | re.DOTALL)
 
-# The following regex supports wikilinks anywhere after the first pipe
-# and correctly matches the end of the file link if the wikilink contains
-# [[ or ]].
-# The namespace names must be substituted into this regex.
-# e.g. FILE_LINK_REGEX % 'File'
-# or FILE_LINK_REGEX % '|'.join(site.namespaces[6])
+# Regex matching file links with optional parameters.
+#
+# Captures the filename and parameters, including nested links
+# within the parameters. The regex safely matches the closing
+# brackets even if inner wikilinks contain [[ or ]].
+# The Namespace names must be substituted into the pattern, e.g.:
+#     FILE_LINK_REGEX % 'File'
+# or: FILE_LINK_REGEX % '|'.join(site.namespaces[6])
+#
+# Don't use this regex directly; use textlib.get_regexes('file', site)`
+# instead.
+#
+# 10.7: Exclude empty filename
 FILE_LINK_REGEX = r"""
     \[\[\s*
     (?:%s)  # namespace aliases
     \s*:
     (?=(?P<filename>
-        [^]|]*
+        [^]|]+
     ))(?P=filename)
     (
         \|
@@ -111,10 +121,11 @@ TIMESTAMP_GAP_LIMIT = 10
 
 
 def to_local_digits(phrase: str | int, lang: str) -> str:
-    """Change Latin digits based on language to localized version.
+    """Change ASCII digits based on language to localized version.
 
-    Be aware that this function only works for several languages, and that it
-    returns an unchanged string if an unsupported language is given.
+    .. attention:: Be aware that this function only works for several
+       languages, and that it returns an unchanged string if an
+       unsupported language is given.
 
     .. versionchanged:: 7.5
        always return a string even `phrase` is an int.
@@ -123,7 +134,7 @@ def to_local_digits(phrase: str | int, lang: str) -> str:
     :param lang: language code
     :return: The localized version
     """
-    digits = NON_LATIN_DIGITS.get(lang)
+    digits = NON_ASCII_DIGITS.get(lang)
     phrase = str(phrase)
     if digits:
         trans = str.maketrans('0123456789', digits)
@@ -131,24 +142,26 @@ def to_local_digits(phrase: str | int, lang: str) -> str:
     return phrase
 
 
-def to_latin_digits(phrase: str,
+def to_ascii_digits(phrase: str,
                     langs: SequenceType[str] | str | None = None) -> str:
-    """Change non-latin digits to latin digits.
+    """Change non-ascii digits to ascii digits.
 
     .. versionadded:: 7.0
+    .. versionchanged:: 10.3
+       this function was renamed from to_latin_digits.
 
-    :param phrase: The phrase to convert to latin numerical.
+    :param phrase: The phrase to convert to ascii numerical.
     :param langs: Language codes. If langs parameter is None, use all
         known languages to convert.
-    :return: The string with latin digits
+    :return: The string with ascii digits
     """
     if langs is None:
-        langs = NON_LATIN_DIGITS.keys()
+        langs = NON_ASCII_DIGITS.keys()
     elif isinstance(langs, str):
         langs = [langs]
 
-    digits = [NON_LATIN_DIGITS[key] for key in langs
-              if key in NON_LATIN_DIGITS]
+    digits = [NON_ASCII_DIGITS[key] for key in langs
+              if key in NON_ASCII_DIGITS]
     if digits:
         trans = str.maketrans(''.join(digits), '0123456789' * len(digits))
         phrase = phrase.translate(trans)
@@ -535,82 +548,208 @@ def removeDisabledParts(text: str,
     return text
 
 
-def removeHTMLParts(text: str, keeptags: list[str] | None = None) -> str:
-    """Return text without portions where HTML markup is disabled.
+def removeHTMLParts(text: str,
+                    keeptags: list[str] | None = None,
+                    *,
+                    removetags: list[str] | None = None) -> str:
+    """Remove selected HTML tags, their content, and comments from text.
 
-    Parts that can/will be removed are HTML tags and all wiki tags. The
-    exact set of parts which should NOT be removed can be passed as the
-    *keeptags* parameter, which defaults to
-    ``['tt', 'nowiki', 'small', 'sup']``.
+    This function removes HTML tags and their contents for tags listed
+    in ``removetags``. Tags specified in ``keeptags`` are preserved
+    along with their content and markup. This is a wrapper around the
+    :class:`GetDataHTML` parser class.
 
     **Example:**
 
-    >>> removeHTMLParts('<div><b><ref><tt>Hi all!</tt></ref></b></div>')
+    >>> remove = removeHTMLParts
+    >>> remove('<div><b><ref><tt>Hi all!</tt></ref></b></div>')
     '<tt>Hi all!</tt>'
+    >>> remove('<style><b>This is stylish</b></style>', keeptags=['style'])
+    '<style></style>'
+    >>> remove('<a>Note:</a> <b>This is important!<!-- really? --></b>')
+    'Note: This is important!'
+    >>> remove('<a>Note:</a> <b>This is important!</b>', removetags=['a'])
+    ' This is important!'
 
-    .. seealso:: :class:`_GetDataHTML`
+    .. caution:: Tag names must be given in lowercase.
+
+    .. versionchanged:: 10.3
+       The *removetags* parameter was added. Refactored to use
+       :class:`GetDataHTML` and its ``__call__`` method. tag attributes
+       will be kept.
+
+    :param text: The input HTML text to clean.
+    :param keeptags: List of tag names to keep, including their content
+        and markup. Defaults to :code:`['tt', 'nowiki', 'small', 'sup']`
+        if None.
+    :param removetags: List of tag names whose tags and content should
+        be removed. The tags ca be preserved if listed in *keeptags*.
+        Defaults to :code:`['style', 'script']` if None.
+    :return: The cleaned text with specified HTML parts removed.
     """
-    # TODO: try to merge with 'removeDisabledParts()' above into one generic
-    # function
-    parser = _GetDataHTML()
-    if keeptags is None:
-        keeptags = ['tt', 'nowiki', 'small', 'sup']
-    with closing(parser):
-        parser.keeptags = keeptags
-        parser.feed(text)
-    return parser.textdata
+    return GetDataHTML(keeptags=keeptags, removetags=removetags)(text)
 
 
-class _GetDataHTML(HTMLParser):
+@dataclass(init=False, eq=False)
+class GetDataHTML(HTMLParser):
 
-    """HTML parser which removes html tags except they are listed in keeptags.
+    """HTML parser that removes unwanted HTML elements and optionally comments.
 
-    The parser is used by :func:`removeHTMLParts` similar to this:
+    Tags listed in *keeptags* are preserved. Tags listed in *removetags*
+    are removed entirely along with their content. Optionally strips HTML
+    comments. Use via the callable interface or in a :code:`with closing(...)`
+    block.
 
-    .. code-block:: python
+    .. note::
+       The callable interface is preferred because it is simpler and
+       ensures proper resource management automatically. If using the
+       context manager, be sure to access :attr:`textdata` before calling
+       :meth:`close`.
 
-       from contextlib import closing
-       from pywikibot.textlib import _GetDataHTML
-       with closing(_GetDataHTML()) as parser:
-           parser.keeptags = ['html']
-           parser.feed('<html><head><title>Test</title></head>'
-                       '<body><h1><!-- Parse --> me!</h1></body></html>')
-           print(parser.textdata)
+    .. tabs::
 
-    The result is:
+       .. tab:: callable interface
 
-    .. code-block:: html
+          .. code-block:: python
 
-       <html>Test me!</html>
+             text = ('<html><head><title>Test</title></head>'
+                     '<body><h1><!-- Parse --> me!</h1></body></html>')
+
+             parser = GetDataHTML(keeptags = ['html'])
+             clean_text = parser(text)
+
+       .. tab:: closing block
+
+          .. code-block:: python
+
+             from contextlib import closing
+             text = ('<html><head><title>Test</title></head>'
+                     '<body><h1><!-- Parse --> me!</h1></body></html>')
+
+             parser = GetDataHTML(keeptags = ['html'])
+             with closing(parser):
+                 parser.feed(text)
+                 clean_text = parser.textdata
+
+          .. warning:: Save the :attr:`textdata` **before** :meth:`close`
+             is called; otherwise the cleaned text is empty.
+
+    **Usage:**
+
+    >>> text = ('<html><head><title>Test</title></head>'
+    ...         '<body><h1><!-- Parse --> me!</h1></body></html>')
+    >>> GetDataHTML()(text)
+    'Test me!'
+    >>> GetDataHTML(keeptags=['title'])(text)
+    '<title>Test</title> me!'
+    >>> GetDataHTML(removetags=['body'])(text)
+    'Test'
+
+    .. caution:: Tag names must be given in lowercase.
 
     .. versionchanged:: 9.2
-       This class is no longer a context manager;
-       :pylib:`contextlib.closing()<contextlib#contextlib.closing>`
-       should be used instead.
+       No longer a context manager
+
+    .. versionchanged:: 10.3
+       Public class now. Added support for removals of tag contents.
 
     .. seealso::
+       - :func:`removeHTMLParts`
        - :pylib:`html.parser`
-       - :pylib:`contextlib#contextlib.closing`
 
-    :meta public:
+    :param keeptags: List of tag names to keep, including their content
+        and markup. Defaults to :code:`['tt', 'nowiki', 'small', 'sup']`
+        if None.
+    :param removetags: List of tag names whose tags and content should
+        be removed. The tags can be preserved if listed in *keeptags*.
+        Defaults to :code:`['style', 'script']` if None.
+    :param removecomments: Whether to remove HTML comments. Defaults to
+        True.
     """
 
-    textdata = ''
-    keeptags: list[str] = []
+    def __init__(self, *,
+                 keeptags: list[str] | None = None,
+                 removetags: list[str] | None = None) -> None:
+        """Initialize default tags and internal state."""
+        super().__init__()
+        self.keeptags: list[str] = (keeptags if keeptags is not None
+                                    else ['tt', 'nowiki', 'small', 'sup'])
+        self.removetags: list[str] = (removetags if removetags is not None
+                                      else ['style', 'script'])
 
-    def handle_data(self, data) -> None:
-        """Add data to text."""
-        self.textdata += data
+        #: The cleaned output text collected during parsing.
+        self.textdata = ''
 
-    def handle_starttag(self, tag, attrs) -> None:
-        """Add start tag to text if tag should be kept."""
+        self._skiptag: str | None = None
+
+    def __call__(self, text: str) -> str:
+        """Feed the parser with *text* and return cleaned :attr:`textdata`.
+
+        :param text: The HTML text to parse and clean.
+        :return: The cleaned text with unwanted tags/content removed.
+        """
+        with closing(self):
+            self.feed(text)
+            return self.textdata
+
+    def close(self) -> None:
+        """Clean current processing and clear :attr:`textdata`."""
+        self.textdata = ''
+        self._skiptag = None
+        super().close()
+
+    def handle_data(self, data: str) -> None:
+        """Handle plain text content found between tags.
+
+        Text is added to the output unless it is located inside a tag
+        marked for removal.
+
+        :param data: The text data between HTML tags.
+        """
+        if not self._skiptag:
+            self.textdata += data
+
+    def handle_starttag(self,
+                        tag: str,
+                        attrs: list[tuple[str, str | None]]) -> None:
+        """Handle an opening HTML tag.
+
+        Tags listed in *keeptags* are preserved in the output. Tags
+        listed in *removetags* begin a skip block, and their content
+        will be excluded from the output.
+
+        .. versionchanged:: 10.3
+           Keep tag attributes.
+
+        :param tag: The tag name (e.g., "div", "script") converted to
+            lowercase.
+        :param attrs: A list of (name, value) pairs with tag attributes.
+        """
         if tag in self.keeptags:
-            self.textdata += f'<{tag}>'
 
-    def handle_endtag(self, tag) -> None:
-        """Add end tag to text if tag should be kept."""
+            # Reconstruct attributes for preserved tags
+            attr_text = ''.join(
+                f' {name}' if value is None else f' {name}="{value}"'
+                for name, value in attrs
+            )
+            self.textdata += f'<{tag}{attr_text}>'
+
+        if tag in self.removetags:
+            self._skiptag = tag
+
+    def handle_endtag(self, tag: str) -> None:
+        """Handle a closing HTML tag.
+
+        Tags listed in *keeptags* are preserved in the output. A closing
+        tag that matches the currently skipped tag will end the skip
+        block.
+
+        :param tag: The name of the closing tag.
+        """
         if tag in self.keeptags:
             self.textdata += f'</{tag}>'
+        if tag in self.removetags and tag == self._skiptag:
+            self._skiptag = None
 
 
 def isDisabled(text: str, index: int, tags=None) -> bool:
@@ -988,6 +1127,101 @@ class Section(NamedTuple):
         return self.title[level:-level].strip()
 
 
+class SectionList(list):
+
+    """List of :class:`Section` objects with heading/level-aware index().
+
+    Introduced for handling lists of sections with custom lookup by
+    :attr:`Section.heading` and :attr:`level<Section.level>`.
+
+    .. versionadded:: 10.4
+    """
+
+    def __contains__(self, value: object) -> bool:
+        """Check if a section matching the given value exists.
+
+        :param value: The section heading string, a (heading, level) tuple,
+            or a :class:`Section` instance to search for.
+        :return: ``True`` if a matching section exists, ``False`` otherwise.
+        """
+        with suppress(ValueError):
+            self.index(value)
+            return True
+
+        return False
+
+    def count(self, value: str | tuple[str, int] | Section, /) -> int:
+        """Count the number of sections matching the given value.
+
+        :param value: The section heading string, a (heading, level) tuple,
+            or a :class:`Section` instance to search for.
+        :return: The number of matching sections.
+        """
+        if isinstance(value, Section):
+            return super().count(value)
+
+        if isinstance(value, tuple) and len(value) == 2:
+            heading, level = value
+            return sum(1 for sec in self
+                       if sec.heading == heading and sec.level == level)
+
+        if isinstance(value, str):
+            return sum(1 for sec in self if sec.heading == value)
+
+        return super().count(value)
+
+    def index(
+        self,
+        value: str | tuple[str, int] | Section,
+        start: int = 0,
+        stop: int = sys.maxsize,
+        /,
+    ) -> int:
+        """Return the index of a matching section.
+
+        Works like ``list.index(value, start, stop)`` but also allows:
+
+        - *value* as a string → match by :attr:`Section.heading` (any level)
+        - *value* as a ``(heading, level)`` tuple → match both
+          :attr:`heading<Section.heading>` and :attr:`level<Section.level>`
+        - *value* as a ``Section`` object → normal list.index() behavior
+
+        :param value: The item to search for. May be:
+            - ``str`` — search by section heading.
+            - ``tuple[str, int]`` — search by heading and section level.
+            - :class:`Section` — search for an exact section object.
+        :param start: Index to start searching from (inclusive).
+        :param stop: Index to stop searching at (exclusive).
+        :return: The integer index of the matching section.
+        :raises ValueError: If no matching section is found.
+        """
+        # Normalize negative indices
+        n = len(self)
+        start = max(0, n + start) if start < 0 else start
+        stop = max(0, n + stop) if stop < 0 else stop
+
+        if isinstance(value, Section):
+            return super().index(value, start, stop)
+
+        if isinstance(value, tuple) and len(value) == 2:
+            heading, level = value
+            for i, sec in enumerate(self[start:stop], start):
+                if sec.heading == heading and sec.level == level:
+                    return i
+
+            raise ValueError(
+                f'{value!r} not found in Section headings/levels')
+
+        if isinstance(value, str):
+            for i, sec in enumerate(self[start:stop], start):
+                if sec.heading == value:
+                    return i
+
+            raise ValueError(f'{value!r} not found in Section headings')
+
+        return super().index(value, start, stop)
+
+
 class Content(NamedTuple):
 
     """A namedtuple as result of :func:`extract_sections` holding page content.
@@ -997,7 +1231,7 @@ class Content(NamedTuple):
     """
 
     header: str  #: the page header
-    sections: list[Section]  #: the page sections
+    sections: SectionList[Section]  #: the page sections
     footer: str  #: the page footer
 
     @property
@@ -1025,7 +1259,7 @@ def _extract_headings(text: str) -> list[_Heading]:
 
 def _extract_sections(text: str, headings) -> list[Section]:
     """Return a list of :class:`Section` objects."""
-    sections = []
+    sections = SectionList()
     if headings:
         # Assign them their contents
         for heading, next_heading in pairwise(headings):
@@ -1086,6 +1320,16 @@ def extract_sections(
     '== History of this =='
     >>> result.sections[1].content.strip()
     'Enter "import this" for usage...'
+    >>> 'Details' in result.sections
+    True
+    >>> ('Details', 2) in result.sections
+    False
+    >>> result.sections.index('Details')
+    2
+    >>> result.sections.index(('Details', 2))
+    Traceback (most recent call last):
+    ...
+    ValueError: ('Details', 2) not found in Section headings/levels
     >>> result.sections[2].heading
     'Details'
     >>> result.sections[2].level
@@ -1101,6 +1345,9 @@ def extract_sections(
     .. versionchanged:: 8.2
        The :class:`Content` and :class:`Section` class have additional
        properties.
+    .. versionchanged:: 10.4
+       Added custom ``index()``, ``count()`` and ``in`` operator support
+       for :attr:`Content.sections`.
 
     :return: The parsed namedtuple.
     """  # noqa: D300, D301
@@ -2214,7 +2461,7 @@ class TimeStripper:
         line = removeDisabledParts(line)
         line = removeHTMLParts(line)
 
-        line = to_latin_digits(line)
+        line = to_ascii_digits(line)
         for pat in self.patterns:
             line, match_obj = self._last_match_and_replace(line, pat)
             if match_obj:
@@ -2269,3 +2516,7 @@ class TimeStripper:
             timestamp = None
 
         return timestamp
+
+
+wrapper = ModuleDeprecationWrapper(__name__)
+wrapper.add_deprecated_attr('to_latin_digits', to_ascii_digits, since='10.3.0')

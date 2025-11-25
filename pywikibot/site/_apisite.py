@@ -9,12 +9,11 @@ from __future__ import annotations
 import datetime
 import re
 import time
-import typing
 import webbrowser
 from collections import OrderedDict, defaultdict
 from contextlib import suppress
 from textwrap import fill
-from typing import TYPE_CHECKING, Any, NamedTuple, TypeVar
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple, TypeVar
 from warnings import warn
 
 import pywikibot
@@ -75,6 +74,7 @@ from pywikibot.tools import (
     cached,
     deprecate_arg,
     deprecated,
+    deprecated_signature,
     issue_deprecation_warning,
     merge_unique_dicts,
     normalize_username,
@@ -828,13 +828,23 @@ class APISite(
 
     @property
     def articlepath(self) -> str:
-        """Get the nice article path with ``{}``placeholder.
+        """Return article path with a ``{}`` placeholder.
+
+        Replaces the ``$1`` placeholder from MediaWiki with a
+        Python-compatible ``{}``.
 
         .. versionadded:: 7.0
+
+        .. versionchanged:: 10.3
+           raises ValueError instead of AttributeError if "$1"
+           placeholder is missing.
+
+        :raises ValueError: missing "$1" placeholder
         """
-        path = self.siteinfo['general']['articlepath']
-        # Assert $1 placeholder is present
-        assert '$1' in path, 'articlepath must contain "$1" placeholder'
+        path = self.siteinfo['articlepath']
+        if '$1' not in path:
+            raise ValueError(
+                f'Invalid article path "{path}": missing "$1" placeholder')
         return path.replace('$1', '{}')
 
     @cached
@@ -854,7 +864,7 @@ class APISite(
             'ca': "(?:[a-zàèéíòóúç·ïü]|'(?!'))*",
             'kaa': "(?:[a-zıʼ’“»]|'(?!'))*",
         }
-        linktrail = self.siteinfo['general']['linktrail']
+        linktrail = self.siteinfo['linktrail']
         if linktrail == '/^()(.*)$/sD':  # empty linktrail
             return ''
 
@@ -1057,7 +1067,7 @@ class APISite(
 
         return self._months_names
 
-    def list_to_text(self, args: typing.Iterable[str]) -> str:
+    def list_to_text(self, args: Iterable[str]) -> str:
         """Convert a list of strings into human-readable text.
 
         The MediaWiki messages 'and' and 'word-separator' are used as
@@ -1173,10 +1183,10 @@ class APISite(
         for nsdata in self.siteinfo.get('namespaces', cache=False).values():
             ns = nsdata.pop('id')
             if ns == 0:
-                canonical_name = nsdata.pop('*')
+                custom_name = canonical_name = nsdata.pop('name')
                 custom_name = canonical_name
             else:
-                custom_name = nsdata.pop('*')
+                custom_name = nsdata.pop('name')
                 canonical_name = nsdata.pop('canonical')
 
             default_case = Namespace.default_case(ns)
@@ -1189,16 +1199,16 @@ class APISite(
             namespace = Namespace(ns, canonical_name, custom_name, **nsdata)
             _namespaces[ns] = namespace
 
-        for item in self.siteinfo.get('namespacealiases'):
+        for item in self.siteinfo['namespacealiases']:
             ns = int(item['id'])
             try:
                 namespace = _namespaces[ns]
             except KeyError:
                 pywikibot.warning('Broken namespace alias "{}" (id: {}) on {}'
-                                  .format(item['*'], ns, self))
+                                  .format(item['alias'], ns, self))
             else:
-                if item['*'] not in namespace:
-                    namespace.aliases.append(item['*'])
+                if item['alias'] not in namespace:
+                    namespace.aliases.append(item['alias'])
 
         return _namespaces
 
@@ -1556,7 +1566,7 @@ class APISite(
 
         :raises ValueError: invalid action parameter
         """
-        if action not in self.siteinfo.get('restrictions')['types']:
+        if action not in self.restrictions['types']:
             raise ValueError(
                 f'{type(self).__name__}.page_can_be_edited(): '
                 f'Invalid value "{action}" for "action" parameter'
@@ -2495,68 +2505,122 @@ class APISite(
 
     # catalog of rollback errors for use in error messages
     _rb_errors = {
-        'noapiwrite': 'API editing not enabled on {site} wiki',
-        'writeapidenied': 'User {user} not allowed to edit through the API',
-        'alreadyrolled':
-            'Page [[{title}]] already rolled back; action aborted.',
-    }  # other errors shouldn't arise because we check for those errors
+        'alreadyrolled': 'The last edit of page {title!r} by user {user!r} '
+                         'was already rolled back.',
+        'onlyauthor': 'The page {title!r} has only {user!r} as author',
+    }  # standard error messages raises API error
 
     @need_right('rollback')
     def rollbackpage(
         self,
-        page: BasePage,
+        page: BasePage | None = None,
+        *,
+        pageid: int | None = None,
         **kwargs: Any
-    ) -> None:
-        """Roll back page to version before last user's edits.
+    ) -> dict[str, int | str]:
+        """Roll back a page to the version before the last edit by a user.
 
-        .. seealso:: :api:`Rollback`
+        This method wraps the MediaWiki :api:`Rollback`. The rollback
+        will revert the last edit(s) made by the specified user on the
+        given page.
 
-        The keyword arguments are those supported by the rollback API.
+        .. versionchanged:: 10.5
+           Added *pageid* as alternative to *page* (one must be given).
+           *markbot* defaults to True if the rollbacker is a bot and not
+           explicitly given. The method now returns a dictionary with
+           rollback information.
 
-        As a precaution against errors, this method will fail unless
-        the page history contains at least two revisions, and at least
-        one that is not by the same user who made the last edit.
+        .. seealso::
+           :meth:`page.BasePage.rollback`
 
-        :param page: the Page to be rolled back (must exist)
-        :keyword user: the last user to be rollbacked;
-            default is page.latest_revision.user
+        :param page: the Page to be rolled back. Cannot be used together
+            with *pageid*.
+        :param pageid: Page ID of the page to be rolled back. Cannot be
+            used together with *page*.
+        :keyword tags: Tags to apply to the rollback.
+        :kwtype tags: str | Sequence[str] | None
+        :keyword str user: The last user to be rolled back; Must be
+            given with *pageid*. Default is
+            :attr:`BasePage.latest_revision.user
+            <page.BasePage.latest_revision>` if *page* is given.
+        :keyword str | None summary: Custom edit summary for the rollback
+        :keyword bool | None markbot: Mark the reverted edits and the
+            revert as bot edits. If not given, it is set to True if the
+            rollback user belongs to the 'bot' group, otherwise False.
+        :keyword watchlist: Unconditionally add or remove the page from
+            the current user's watchlist; 'preferences' is ignored for
+            bot users.
+        :kwtype watchlist: Literal['watch', 'unwatch', 'preferences',
+            'nochange'] | None
+        :keyword watchlistexpiry: Watchlist expiry timestamp. Omit this
+            parameter entirely to leave the current expiry unchanged.
+        :kwtype watchlistexpiry: pywikibot.Timestamp | str | Literal[
+            'infinite', 'indefinite', 'infinity', 'never'] | None
+        :returns: Dictionary containing rollback result like
+
+            .. code:: python
+
+               {
+                   'title': <page title>,
+                   'pageid': <page ID>,
+                   'summary': <rollback summary>,
+                   'revid': <ID of the new revision created by the rollback>,
+                   'old_revid': <ID of the newest revision being rolled back>,
+                   'last_revid': <ID of the revision restored by the rollback>,
+               }
+
+        :raises APIError: An error was returned by the rollback API, or
+            another standard API error occurred.
+        :raises Error: The page was already rolled back, or the given
+            *user* is the only author.
+        :raises NoPageError: The given *page* or *pageid* does not exist.
+        :raises TypeError: *pageid* is of invalid type.
+        :raises ValueError: Both *page* and *pageid* were given, or none
+            of them, or *pageid* has an invalid value.
         """
-        if len(page._revisions) < 2:
-            raise Error(
-                f'Rollback of {page} aborted; load revision history first.')
+        if page is not None and pageid is not None:
+            raise ValueError(
+                "The parameters 'page' and 'pageid' cannot be used together.")
+
+        if page is None and pageid is None:
+            raise ValueError(
+                "One of parameters 'page' or 'pageid' is required.")
+
+        if page is None and pageid is not None:
+            page = next(self.load_pages_from_pageids(str(pageid)), None)
+
+        if page is None:
+            raise NoPageError(pageid)
 
         user = kwargs.pop('user', page.latest_revision.user)
-        for rev in sorted(page._revisions.values(), reverse=True,
-                          key=lambda r: r.timestamp):
-            # start with most recent revision first
-            if rev.user != user:
-                break
-        else:
-            raise Error(f'Rollback of {page} aborted; only one user in '
-                        f'revision history.')
+        params = merge_unique_dicts(
+            kwargs,
+            action='rollback',
+            title=page,
+            token=self.tokens['rollback'],
+            user=user,
+        )
 
-        parameters = merge_unique_dicts(kwargs,
-                                        action='rollback',
-                                        title=page,
-                                        token=self.tokens['rollback'],
-                                        user=user)
+        rb_user = self.user()
+        if rb_user is not None and 'markbot' not in kwargs:
+            params['markbot'] = self.has_group('bot')
+
         self.lock_page(page)
-        req = self.simple_request(**parameters)
+        req = self.simple_request(**params)
         try:
-            req.submit()
+            result = req.submit()
         except APIError as err:
             errdata = {
-                'site': self,
                 'title': page.title(with_section=False),
-                'user': self.user(),
+                'user': user,
             }
             if err.code in self._rb_errors:
                 raise Error(
                     self._rb_errors[err.code].format_map(errdata)
                 ) from None
-            pywikibot.debug(
-                f"rollback: Unexpected error code '{err.code}' received.")
             raise
+        else:
+            return result['rollback']
         finally:
             self.unlock_page(page)
 
@@ -2724,6 +2788,61 @@ class APISite(
         finally:
             self.unlock_page(page)
 
+    @deprecated("the 'restrictions' property", since='10.5.0')
+    def protection_types(self) -> set[str]:
+        """Return the protection types available on this site.
+
+        **Example:**
+
+        >>> site = pywikibot.Site('wikipedia:test')
+        >>> sorted(site.protection_types())
+        ['create', 'edit', 'move', 'upload']
+
+        .. deprecated:: 10.5
+           Use :attr:`restrictions[types]<restrictions>` instead.
+
+        :return: protection types available
+        """
+        return self.restrictions['types']
+
+    @deprecated("the 'restrictions' property", since='10.5.0')
+    def protection_levels(self) -> set[str]:
+        """Return the protection levels available on this site.
+
+        **Example:**
+
+        >>> site = pywikibot.Site('wikipedia:test')
+        >>> sorted(site.protection_levels())
+        ['', 'autoconfirmed', ... 'sysop', 'templateeditor']
+
+        .. deprecated:: 10.5
+           Use :attr:`restrictions[levels]<restrictions>` instead.
+
+        :return: protection levels available
+        """
+        return self.restrictions['levels']
+
+    @property
+    def restrictions(self) -> dict[str, set[str]]:
+        """Return the page restrictions available on this site.
+
+        **Example:**
+
+        >>> site = pywikibot.Site('wikipedia:test')
+        >>> r = site.restrictions
+        >>> sorted(r['types'])
+        ['create', 'edit', 'move', 'upload']
+        >>> sorted(r['levels'])
+        ['', 'autoconfirmed', ... 'sysop', 'templateeditor']
+
+        .. versionadded:: 10.5
+        .. seealso:: :meth:`page_restrictions`
+
+        :return: dict with keys 'types', 'levels', 'cascadinglevels' and
+            'semiprotectedlevels', all as sets of strings
+        """
+        return {k: set(v) for k, v in self.siteinfo['restrictions'].items()}
+
     _protect_errors = {
         'noapiwrite': 'API editing not enabled on {site} wiki',
         'writeapidenied': 'User {user} not allowed to edit through the API',
@@ -2734,36 +2853,6 @@ class APISite(
             "can't edit it.",
         'protect-invalidlevel': 'Invalid protection level'
     }
-
-    def protection_types(self) -> set[str]:
-        """Return the protection types available on this site.
-
-        **Example:**
-
-        >>> site = pywikibot.Site('wikipedia:test')
-        >>> sorted(site.protection_types())
-        ['create', 'edit', 'move', 'upload']
-
-        .. seealso:: :py:obj:`Siteinfo._get_default()`
-
-        :return: protection types available
-        """
-        return set(self.siteinfo.get('restrictions')['types'])
-
-    def protection_levels(self) -> set[str]:
-        """Return the protection levels available on this site.
-
-        **Example:**
-
-        >>> site = pywikibot.Site('wikipedia:test')
-        >>> sorted(site.protection_levels())
-        ['', 'autoconfirmed', ... 'sysop', 'templateeditor']
-
-        .. seealso:: :py:obj:`Siteinfo._get_default()`
-
-        :return: protection types available
-        """
-        return set(self.siteinfo.get('restrictions')['levels'])
 
     @need_right('protect')
     def protect(
@@ -2778,15 +2867,14 @@ class APISite(
 
         .. seealso::
            - :meth:`page.BasePage.protect`
-           - :meth:`protection_types`
-           - :meth:`protection_levels`
+           - :attr:`restrictions`
+           - :meth:`page_restrictions`
            - :api:`Protect`
 
         :param protections: A dict mapping type of protection to
-            protection level of that type. Refer :meth:`protection_types`
-            for valid restriction types and :meth:`protection_levels`
-            for valid restriction levels. If None is given, however,
-            that protection will be skipped.
+            protection level of that type. Refer :meth:`restrictions`
+            for valid restriction types restriction levels. If None is
+            given, however, that protection will be skipped.
         :param reason: Reason for the action
         :param expiry: When the block should expire. This expiry will be
             applied to all protections. If ``None``, ``'infinite'``,
@@ -2907,31 +2995,76 @@ class APISite(
         return req.submit()
 
     @need_right('editmywatchlist')
+    @deprecated_signature(since='10.4.0')
     def watch(
         self,
         pages: BasePage | str | list[BasePage | str],
-        unwatch: bool = False
+        *,
+        unwatch: bool = False,
+        expiry: pywikibot.Timestamp | str | Literal[
+            'infinite', 'indefinite', 'infinity', 'never'] | None = None
     ) -> bool:
         """Add or remove pages from watchlist.
 
-        .. seealso:: :api:`Watch`
+        .. versionchanged:: 10.4.0
+           Added the *expiry* parameter to specify watch expiry time.
+           Passing *unwatch* as a positional parameter is deprecated;
+           it must be passed as keyword argument.
+
+           .. note:: When watching a page without *expiry*, the function
+              returns False if any page does not exist, because it was
+              not added to the watchlist.
+
+        .. seealso::
+           - :api:`Watch`
+           - :meth:`BasePage.watch`
+           - :meth:`Site.watched_pages()
+             <pywikibot.site._generators.GeneratorsMixin.watched_pages>`
 
         :param pages: A single page or a sequence of pages.
         :param unwatch: If True, remove pages from watchlist;
             if False add them (default).
-        :return: True if API returned expected response; False otherwise
+        :param expiry: Expiry timestamp to apply to the watch. Passing
+            None or omitting this parameter leaves any existing expiry
+            unchanged. Expiry values may be relative (e.g. ``5 months``
+            or ``2 weeks``) or absolute (e.g. ``2014-09-18T12:34:56Z``).
+            For no expiry, use ``infinite``, ``indefinite``, ``infinity``
+            or `never`. For absolute timestamps the :class:`Timestamp`
+            class can be used.
+        :return: True if API returns expected response; False otherwise.
+            If *unwatch* is False, *expiry* is None or specifies no
+            defined end date, return False if the page does not exist.
+        :raises APIError: badexpiry: Invalid value for expiry parameter
         :raises KeyError: 'watch' isn't in API response
+        :raises TypeError: unexpected keyword argument
         """
         parameters = {
             'action': 'watch',
             'titles': pages,
             'token': self.tokens['watch'],
             'unwatch': unwatch,
+            'expiry': expiry or None,
         }
+
+        if not unwatch:
+            parameters['expiry'] = expiry or None
+        elif expiry:
+            msg = (f'\nexpiry parameter ({expiry!r}) is ignored when '
+                   f"unwatch=True.\nPlease omit 'expiry' when unwatching.")
+            warn(msg, category=UserWarning, stacklevel=2)
+
         req = self.simple_request(**parameters)
         results = req.submit()
-        unwatch_s = 'unwatched' if unwatch else 'watched'
-        return all(unwatch_s in r for r in results['watch'])
+        watchtype = 'unwatched' if unwatch else 'watched'
+
+        for r in results['watch']:
+            if watchtype not in r:
+                return False
+
+            if 'missing' in r and 'watched' in r and 'expiry' not in r:
+                return False
+
+        return True
 
     def purgepages(
         self,
@@ -2989,7 +3122,7 @@ class APISite(
         >>> site.is_uploaddisabled()
         True
         """
-        return not self.siteinfo.get('general')['uploadsenabled']
+        return not self.siteinfo['uploadsenabled']
 
     def stash_info(
         self,

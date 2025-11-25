@@ -5,6 +5,12 @@ Pywikibot script to get ISBN data from a digital library, and create or
 amend the related Wikidata item for edition (with the
 :samp:`P212, {ISBN number}` as unique external ID).
 
+.. deprecated:: 10.3
+   This script is deprecated and will be removed in Pywikibot 11.0.
+   An external version of this script can be found in the
+   `geertivp/Pywikibot <https://github.com/geertivp/Pywikibot>`_ script
+   collection. See :phab:`T398140` for details.
+
 Use digital libraries to get ISBN data in JSON format, and integrate the
 results into Wikidata.
 
@@ -673,7 +679,7 @@ def get_language_preferences() -> list[str]:
     always appended.
 
     .. seealso::
-       - :wiki:`List_of_ISO_639-1_codes
+       - :wiki:`List_of_ISO_639-1_codes`
 
     :Return: List of ISO 639-1 language codes with strings delimited by
         ':'.
@@ -966,11 +972,6 @@ def add_claims(isbn_data: dict[str, Any]) -> int:  # noqa: C901
     if len(titles) > 1:
         # Redundant "subtitles" are ignored
         subtitle = first_upper(titles[1].strip())
-
-    # Get formatted ISBN number
-    isbn_number = isbn_data['ISBN-13']  # Numeric format
-    isbn_fmtd = isbnlib.mask(isbn_number)  # Canonical format (with "-")
-    pywikibot.log(isbn_fmtd)
 
     # Search the ISBN number both in canonical and numeric format
     qnumber_list = get_item_with_prop_value(ISBNPROP, isbn_fmtd)
@@ -1560,7 +1561,7 @@ def main(*args: str) -> None:
                    f'{pywikibot.__version__}, {pgmlic}, {creator}')
 
     # This script requires a bot flag
-    wdbotflag = 'bot' in pywikibot.User(repo, repo.user()).groups()
+    wdbotflag = repo.has_group('bot')
 
     # Prebuilt targets
     target_author = pywikibot.ItemPage(repo, AUTHORINSTANCE)

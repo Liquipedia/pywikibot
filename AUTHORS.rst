@@ -191,6 +191,7 @@ L
 ::
 
 
+    Lars G
     Legoktm
     Leonardo Gregianin
     Lewis Cawte
@@ -294,6 +295,7 @@ S
 ::
 
 
+    Sanjai Siddharthan
     Serio Santoro
     Scot Wilcoxon
     Shardul C
@@ -317,6 +319,7 @@ T
 
 
     Tacsipacsi
+    Tejashxv
     Tgr
     TheRogueMule
     theopolisme
@@ -381,7 +384,6 @@ Y
     Yrithinnd
     Yuri Astrakhan
     Yusuke Matsubara
-    Zaher Kadour
 
 Z
 -
@@ -389,5 +391,7 @@ Z
 ::
 
 
+    Zabe
+    Zaher Kadour
     zhuyifei1999
     Zoran Dori

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Test OAuth functionality."""
 #
-# (C) Pywikibot team, 2015-2024
+# (C) Pywikibot team, 2015-2025
 #
 # Distributed under the terms of the MIT license.
 #
@@ -80,16 +80,16 @@ class OAuthEditTest(OAuthSiteTestCase):
         p = pywikibot.Page(self.site, title)
         try:
             p.site.editpage(p, appendtext='\n' + ts)
-        except EditConflictError as e:
+        except EditConflictError as e:  # pragma: no cover
             self.assertEqual(e.page, p)
         else:
             revision_id = p.latest_revision_id
             p = pywikibot.Page(self.site, title)
             t = p.text
             if revision_id == p.latest_revision_id:
-                self.assertTrue(p.text.endswith(ts))
+                self.assertEndsWith(p.text, ts)
             else:
-                self.assertIn(ts, t)
+                self.assertIn(ts, t)  # pragma: no cover
 
 
 class TestOauthLoginManager(DefaultSiteTestCase, OAuthSiteTestCase):

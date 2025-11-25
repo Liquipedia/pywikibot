@@ -25,7 +25,7 @@ jobs:
       fail-fast: false
       max-parallel: 19
       matrix:
-        python-version: [pypy3.10, '3.8', '3.9', '3.10', '3.11', '3.12', '3.13']
+        python-version: [pypy3.10, pypy3.11, '3.8', '3.9', '3.10', '3.11', '3.12', '3.13', '3.14']
         site: ['wikipedia:en', 'wikisource:zh']
         include:
           - python-version: '3.8'
@@ -59,12 +59,6 @@ jobs:
           - python-version: pypy3.8
             site: wikisource:zh
             os: ubuntu-22.04
-          - python-version: 3.14-dev
-            site: wikipedia:en
-            os: ubuntu-22.04
-          - python-version: 3.14-dev
-            site: wikisource:zh
-            os: ubuntu-22.04
           - python-version: 3.15-dev
             site: wikipedia:en
             os: ubuntu-22.04
@@ -73,11 +67,11 @@ jobs:
             os: ubuntu-22.04
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           submodules: true
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         if: "!endsWith(matrix.python-version, '-dev')"
         with:
           python-version: ${{ matrix.python-version }}
@@ -101,10 +95,10 @@ jobs:
       - name: Generate family files
         run: |
           if  [ ${{matrix.family || 0}} == wpbeta ]; then
-            python pwb.py generate_family_file http://${{matrix.code}}.wikipedia.beta.wmflabs.org/ wpbeta y
+            python pwb.py generate_family_file http://${{matrix.code}}.wikipedia.beta.wmcloud.org/ wpbeta y
           fi
           if [ ${{matrix.site || 0}} == 'wsbeta:en' ]; then
-            python pwb.py generate_family_file http://en.wikisource.beta.wmflabs.org/ wsbeta y
+            python pwb.py generate_family_file http://en.wikisource.beta.wmcloud.org/ wsbeta n
           fi
       - name: Generate user files
         run: |
@@ -140,6 +134,7 @@ jobs:
           fi
       - name: Show coverage statistics
         run: |
+          coverage combine || true
           coverage report
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
@@ -147,4 +142,7 @@ jobs:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
       - name: Check on failure
         if: steps.ci_test.outcome == 'failure'
-        run: exit 1
+        run: |
+          # Print public IP of runner
+          curl -s https://api.ipify.org
+          exit 1

@@ -51,9 +51,9 @@ class Family(family.SubdomainFamily, family.WikimediaFamily):
         'nds', 'nds-nl', 'ne', 'new', 'nia', 'nl', 'nn', 'no', 'nov', 'nqo',
         'nr', 'nrm', 'nso', 'nup', 'nv', 'ny', 'oc', 'olo', 'om', 'or', 'os',
         'pa', 'pag', 'pam', 'pap', 'pcd', 'pcm', 'pdc', 'pfl', 'pi', 'pl',
-        'pms', 'pnb', 'pnt', 'ps', 'pt', 'pwn', 'qu', 'rm', 'rmy', 'rn', 'ro',
-        'roa-rup', 'roa-tara', 'rsk', 'ru', 'rue', 'rw', 'sa', 'sah', 'sat',
-        'sc', 'scn', 'sco', 'sd', 'se', 'sg', 'sh', 'shi', 'shn', 'si',
+        'pms', 'pnb', 'pnt', 'ps', 'pt', 'pwn', 'qu', 'rki', 'rm', 'rmy', 'rn',
+        'ro', 'roa-rup', 'roa-tara', 'rsk', 'ru', 'rue', 'rw', 'sa', 'sah',
+        'sat', 'sc', 'scn', 'sco', 'sd', 'se', 'sg', 'sh', 'shi', 'shn', 'si',
         'simple', 'sk', 'skr', 'sl', 'sm', 'smn', 'sn', 'so', 'sq', 'sr',
         'srn', 'ss', 'st', 'stq', 'su', 'sv', 'sw', 'syl', 'szl', 'szy', 'ta',
         'tay', 'tcy', 'tdd', 'te', 'tet', 'tg', 'th', 'ti', 'tig', 'tk', 'tl',
@@ -203,6 +203,7 @@ class Family(family.SubdomainFamily, family.WikimediaFamily):
         'he': ('בעבודה',),
         'hr': ('Radovi',),
         'hy': ('Խմբագրում եմ',),
+        'ro': ('Dezvoltare', 'S-dezvoltare', 'Modific acum'),
         'ru': ('Редактирую',),
         'sr': ('Радови у току', 'Рут'),
         'test': ('In use',),
@@ -219,7 +220,10 @@ class Family(family.SubdomainFamily, family.WikimediaFamily):
                'Archivace start', 'Posloupnost archivů', 'Rfa-archiv-start',
                'Rfc-archiv-start'),
         'de': ('Archiv',),
+        'ro': ('Arhivă',),
     }
+
+    citoid_endpoint = '/api/rest_v1/data/citation/'
 
     @classmethod
     def __post_init__(cls) -> None:

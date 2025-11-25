@@ -1,6 +1,6 @@
 """GeneratorFactory module which handles pagegenerators options."""
 #
-# (C) Pywikibot team, 2008-2024
+# (C) Pywikibot team, 2008-2025
 #
 # Distributed under the terms of the MIT license.
 #
@@ -12,7 +12,7 @@ import sys
 from datetime import timedelta
 from functools import partial
 from itertools import zip_longest
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import pywikibot
 from pywikibot import i18n
@@ -63,13 +63,13 @@ from pywikibot.tools.itertools import (
 
 
 if TYPE_CHECKING:
-    from typing_extensions import Literal
+    from typing import Any, Literal, Optional
 
     from pywikibot.site import BaseSite, Namespace
 
     HANDLER_GEN_TYPE = Iterable[pywikibot.page.BasePage]
     GEN_FACTORY_CLAIM_TYPE = list[tuple[str, str, dict[str, str], bool]]
-    OPT_GENERATOR_TYPE = HANDLER_GEN_TYPE | None
+    OPT_GENERATOR_TYPE = Optional[HANDLER_GEN_TYPE]
 
 
 # This is the function that will be used to de-duplicate page iterators.

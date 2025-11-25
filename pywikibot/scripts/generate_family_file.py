@@ -43,6 +43,7 @@ import string
 import sys
 from contextlib import suppress
 from pathlib import Path
+from textwrap import fill
 from urllib.parse import urlparse, urlunparse
 
 
@@ -96,7 +97,12 @@ class FamilyFileGenerator:
         self.wikis = {}  # {'https://wiki/$1': Wiki('https://wiki/$1'), ...}
         self.langs = []  # [Wiki('https://wiki/$1'), ...]
 
-    def get_params(self) -> bool:  # pragma: no cover
+    @staticmethod
+    def show(*args, **kwargs):
+        """Wrapper around print to be mocked in tests."""
+        print(*args, **kwargs)
+
+    def get_params(self) -> bool:
         """Ask for parameters if necessary."""
         if self.base_url is None:
             with suppress(KeyboardInterrupt):
@@ -117,8 +123,8 @@ class FamilyFileGenerator:
                 return False
 
         if any(x not in NAME_CHARACTERS for x in self.name):
-            print(f'ERROR: Name of family "{self.name}" must be ASCII letters'
-                  ' and digits [a-zA-Z0-9]')
+            self.show(f'ERROR: Name of family "{self.name}" must be ASCII'
+                      ' letters  and digits [a-zA-Z0-9]')
             return False
 
         return True
@@ -141,7 +147,7 @@ class FamilyFileGenerator:
                     break
             else:
                 return w, verify
-        return None, None  # pragma: no cover
+        return None, None
 
     def run(self) -> None:
         """Main method, generate family file."""
@@ -153,10 +159,10 @@ class FamilyFileGenerator:
             return
 
         self.wikis[w.lang] = w
-        print('\n=================================='
-              f'\nAPI url: {w.api}'
-              f'\nMediaWiki version: {w.version}'
-              '\n==================================\n')
+        self.show('\n=================================='
+                  f'\nAPI url: {w.api}'
+                  f'\nMediaWiki version: {w.version}'
+                  '\n==================================\n')
 
         self.getlangs(w)
         self.getapis()
@@ -171,13 +177,14 @@ class FamilyFileGenerator:
            same domain are collected. A [h]elp answer was added to show
            more information about possible answers.
         """
-        print('Determining other sites...', end='')
+        self.show('Determining other sites...', end='')
         try:
             self.langs = w.langs
-            print(' '.join(sorted(wiki['prefix'] for wiki in self.langs)))
-        except Exception as e:  # pragma: no cover
+            self.show(fill(' '.join(sorted(wiki['prefix']
+                                           for wiki in self.langs))))
+        except Exception as e:
             self.langs = []
-            print(e, '; continuing...')
+            self.show(e, '; continuing...')
 
         if len([lang for lang in self.langs if lang['url'] == w.iwpath]) == 0:
             if w.private_wiki:
@@ -190,7 +197,7 @@ class FamilyFileGenerator:
         code_len = len(self.langs)
         if code_len > 1:
             if self.dointerwiki is None:
-                while True:  # pragma: no cover
+                while True:
                     makeiw = input(
                         '\n'
                         f'There are {code_len} sites available.'
@@ -199,7 +206,7 @@ class FamilyFileGenerator:
                         '([y]es, [s]trict, [N]o, [e]dit), [h]elp) ').lower()
                     if makeiw in ('y', 's', 'n', 'e', ''):
                         break
-                    print(
+                    self.show(
                         '\n'
                         '[y]es:    create interwiki links for all sites\n'
                         '[s]trict: yes, but for sites with same domain only\n'
@@ -218,9 +225,9 @@ class FamilyFileGenerator:
                 self.langs = [wiki for wiki in self.langs
                               if domain in wiki['url']]
 
-            elif makeiw == 'e':  # pragma: no cover
+            elif makeiw == 'e':
                 for wiki in self.langs:
-                    print(wiki['prefix'], wiki['url'])
+                    self.show(wiki['prefix'], wiki['url'])
                 do_langs = re.split(' *,| +',
                                     input('Which sites do you want: '))
                 self.langs = [wiki for wiki in self.langs
@@ -235,20 +242,20 @@ class FamilyFileGenerator:
 
     def getapis(self) -> None:
         """Load other site pages."""
-        print(f'Loading {len(self.langs)} wikis... ')
+        self.show(f'Loading {len(self.langs)} wikis... ')
         remove = []
         for lang in self.langs:
             key = lang['prefix']
-            print(f'  * {key}... ', end='')
+            self.show(f'  * {key}... ', end='')
             if key not in self.wikis:
                 try:
                     self.wikis[key] = self.Wiki(lang['url'])
-                    print('downloaded')
-                except Exception as e:  # pragma: no cover
-                    print(e)
+                    self.show('downloaded')
+                except Exception as e:
+                    self.show(e)
                     remove.append(lang)
             else:
-                print('in cache')
+                self.show('in cache')
 
         for lang in remove:
             self.langs.remove(lang)
@@ -256,11 +263,11 @@ class FamilyFileGenerator:
     def writefile(self, verify) -> None:
         """Write the family file."""
         fp = Path(self.base_dir, 'families', f'{self.name}_family.py')
-        print(f'Writing {fp}... ')
+        self.show(f'Writing {fp}... ')
 
         if fp.exists() and input(
                 f'{fp} already exists. Overwrite? (y/n) ').lower() == 'n':
-            print('Terminating.')
+            self.show('Terminating.')
             sys.exit(1)
 
         code_hostname_pairs = '\n        '.join(

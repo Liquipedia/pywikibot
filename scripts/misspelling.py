@@ -20,17 +20,17 @@ Command line options:
                given, it starts at the beginning.
 """
 #
-# (C) Pywikibot team, 2007-2024
+# (C) Pywikibot team, 2007-2025
 #
 # Distributed under the terms of the MIT license.
 #
 from __future__ import annotations
 
 from itertools import chain
-from typing import Generator
 
 import pywikibot
 from pywikibot import i18n, pagegenerators
+from pywikibot.backports import Generator
 
 
 try:
@@ -62,11 +62,20 @@ class MisspellingRobot(BaseDisambigBot):
 
     # Optional: if there is a category, one can use the -start parameter
     misspelling_categories = ('Q8644265', 'Q9195708')
-    update_options = {'start': None}
+    update_options = {'start': None, 'page': None}
 
     @property
     def generator(self) -> Generator[pywikibot.Page]:
         """Generator to retrieve misspelling pages or misspelling redirects."""
+        # If a single page is specified, yield that page directly
+        if self.opt.page:
+            page = pywikibot.Page(self.site, self.opt.page)
+            if page.exists():
+                yield page
+            else:
+                pywikibot.error(f"Page '{self.opt.page}' does not exist.")
+            return
+
         templates = self.misspelling_templates.get(self.site.sitename)
         categories = [cat for cat in (self.site.page_from_repository(item)
                                       for item in self.misspelling_categories)
@@ -173,6 +182,9 @@ def main(*args: str) -> None:
                 'At which page do you want to start?')
         elif opt == 'main':
             options[opt] = True
+        elif opt == 'page':
+            options[opt] = value or pywikibot.input(
+                'Which page do you want to process?')
 
     bot = MisspellingRobot(**options)
     bot.run()

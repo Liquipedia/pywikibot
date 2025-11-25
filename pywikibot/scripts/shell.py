@@ -16,7 +16,7 @@ Usage::
 .. versionchanged:: 7.0
    moved to pywikibot.scripts
 """
-# (C) Pywikibot team, 2014-2024
+# (C) Pywikibot team, 2014-2025
 #
 # Distributed under the terms of the MIT license.
 #

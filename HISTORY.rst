@@ -1,6 +1,134 @@
 Release History
 ===============
 
+10.6.0
+------
+*23 October 2025*
+
+* Fix :meth:`ItemPage.get_value_at_timestamp()<pywikibot.ItemPage.get_value_at_timestamp>`;
+  keep the rank of the claims in the loop. (:phab:`T407701`)
+* :meth:`Family.isPublic()<family.Family.isPublic>` is deprecated (:phab:`T407049`)
+* Added :func:`tools.itertools.union_generators` for sorted merging of pre-sorted iterables.
+* **Support for Python 3.8 will be discontinued**;
+  this is likely the last Pywikibot version to support it.
+* Added a Citoid Query interface with the :mod:`data.citoid` module.
+* Updated localization (L10N) files.
+* :meth:`Family.interwiki_replacements<family.Family.interwiki_replacements>` is deprecated;
+  use :attr:`Family.code_aliases<family.Family.code_aliases>` instead.
+* The first parameter of :meth:`Transliterator.transliterate
+  <userinterfaces.transliteration.Transliterator.transliterate>` is positional only
+  whereas *prev* and *succ* parameters are keyword only. The :class:`Transliterator
+  <userinterfaces.transliteration.Transliterator>` was improved.
+* Show user-agent with :mod:`version<pywikibot.scripts.version>` script (:phab:`T406458`)
+* Positional arguments of :func:`daemonize()<daemonize.daemonize>` are deprecated and must
+  be given as keyword arguments.
+* i18n updates.
+* Return :meth:`bot.BaseBot.userPut` result from :meth:`AutomaticTWSummaryBot.put_current()
+  <bot.AutomaticTWSummaryBot.put_current>` method
+
+
+10.5.0
+------
+*21 September 2025*
+
+* :class:`Siteinfo<pywikibot.site._siteinfo.Siteinfo>` query is made with formatversion 2. Several
+  boolean values are available now. Note that '*' keys for some data are kept for backward
+  compatibility but may be removed later. (:phab:`T404301`)
+* A new property :attr:`APISite.restrictions<pywikibot.site._apisite.APISite.restrictions>` was
+  added. It replaces the methods :meth:`APISite.protection_types()
+  <pywikibot.site._apisite.APISite.protection_types>` and :meth:`APISite.protection_levels()
+  <pywikibot.site._apisite.APISite.protection_levels>` which are deprecated now.
+* Support for mswikiquote was added (:phab:`T404702`)
+* :meth:`APISite.rollbackpage()<pywikibot.site._apisite.APISite.rollbackpage>` supports *pageid*
+  argument as alternative to *page*. *markbot* defaults to True if the rollbacker is a bot and not
+  explicitly given. The method now returns a dictionary with rollback information. The version
+  history no longer has to be preloaded. (:phab:`T403425`)
+* :meth:`BasePage.rollback()<page.BasePage.rollback>` was implemented (:phab:`T403425`)
+* The first parameter of :exc:`exceptions.PageRelatedError` may now be a pageid (:phab:`T403425`)
+* i18n Updates
+* Use 'login' token from API response in :meth:`login.ClientLoginManager.login_to_site`
+  (:phab:`T328814`)
+* Always use *fallback_prompt* in :func:`i18n.twtranslate` whenever no
+  translation is found, including unknown keys in existing packages (:phab:`T326470`)
+
+
+10.4.0
+------
+*31 August 2025*
+
+* Apply client-side filtering for *maxsize* in misermode in
+  :meth:`Site.allpages()<pywikibot.site._generators.GeneratorsMixin.allpages>` (:phab:`T402995`)
+* Add :attr:`filter_func()<data.api.APIGeneratorBase.filter_func>` and :meth:`filter_item()
+  <data.api.APIGeneratorBase.filter_item>` filter function in :class:`APIGeneratorBase
+  <data.api.APIGeneratorBase>` and modify `generator` property to implement filtering in
+  `APIGeneratorBase` subclasses (:phab:`T402995`)
+* All parameters of :meth:`Site.allpages()<pywikibot.site._generators.GeneratorsMixin.allpages>`
+  except *start* must be given as keyword arguments.
+* Add support for bewwiktionary (:phab:`T402136`)
+* Add user-agent header to :mod:`eventstreams` requests (:phab:`T402796`)
+* Update i18n
+* Save global options in :attr:`bot.global_args` (:phab:`T250034`)
+* Update :mod:`plural` forms from unicode.org (:phab:`T114978`)
+* Add :class:`textlib.SectionList` to hold :attr:`textlib.Content.sections` (:phab:`T401464`)
+* :class:`pywikibot.Coordinate` parameters are keyword only
+* Add *strict* parameter to :meth:`Site.unconnected_pages()
+  <pywikibot.site._extensions.unconnected_pages>` and :func:`pagegenerators.UnconnectedPageGenerator`
+  (:phab:`T401699`)
+* Raise ValueError if a VAR_POSITIONAL parameter like *\*args* is used with
+  :class:`tools.deprecate_positionals` decorator
+* Add :meth:`get_value_at_timestamp()<pywikibot.ItemPage.get_value_at_timestamp>` API
+  to :class:`pywikibot.ItemPage` (:phab:`T400612`)
+* Clean up :mod:`setup` module (:phab:`T396356`)
+* Implement :meth:`pywikibot.ItemPage.get_best_claim` (:phab:`T400610`)
+* Add *expiry* parameter to :meth:`BasePage.watch()<page.BasePage.watch>` and
+  :meth:`Site.watch()<pywikibot.site._apisite.APISite.watch>`; fix the methods to return False if
+  page is missing and no expiry is set (:phab:`T330839`)
+
+
+10.3.2
+------
+*12 August 2025*
+
+* Add support for zghwiktionary, madwikisource, rkiwiki, minwikibooks
+  (:phab:`T391769`, :phab:`T392501`, :phab:`T395501`, :phab:`T399787`)
+* i18n updates
+
+
+10.3.1
+------
+*08 August 2025*
+
+* Add support for tlwikisource (:phab:`T388656`)
+* i18n updates
+
+
+10.3.0
+------
+*03 August 2025*
+
+* :attr:`Site.articlepath<pywikibot.site._apisite.APISite.articlepath>` may raise a ValueError
+  instead of AttributeError if ``$1`` placeholder is missing from API
+* Refactor the :class:`throttle.Throttle` class (:phab:`T289318`)
+* L10N-Updates: add language aliases for ``gsw``, ``sgs``, ``vro``, ``rup`` and ``lzh``
+  to :class:`family.WikimediaFamily` family class
+  (:phab:`T399411`, :phab:`T399438`, :phab:`T399444`, :phab:`T399693`, :phab:`T399697` )
+* Refactor HTML removal logic in :func:`textlib.removeHTMLParts` using :class:`textlib.GetDataHTML`
+  parser; *removetags* parameter was introduced to remove specified tag blocks (:phab:`T399378`)
+* Refactor :class:`echo.Notification` and fix :meth:`mark_as_read()<echo.Notification.mark_as_read>`
+  method (:phab:`T398770`)
+* Update beta domains in family files from beta.wmflabs.org to beta.wmcloud.org (:phab:`T289318`)
+* ``textlib.to_latin_digits()`` was renamed to :func:`textlib.to_ascii_digits` (:phab:`T398146#10958283`),
+  ``NON_LATIN_DIGITS`` of :mod:`userinterfaces.transliteration` was renamed to ``NON_ASCII_DIGITS``
+* Add -cookies option to the :mod:`login<pywikibot.scripts.login>` script to log in with cookies
+  files only
+* Create a Site using the :func:`pywikibot.Site` constructor with a given url even if the URL, even
+  if it ends with a slash (:phab:`T396592`)
+* Remove hard-coded error messages from :meth:`login.LoginManager.login` and use API response instead
+* Add additional information to :meth:`Site.login()<pywikibot.site._apisite.APISite.login>`
+  error message (:phab:`T395670`)
+* i18n updates
+
+
 10.2.0
 ------
 *14 June 2025*
@@ -90,7 +218,7 @@ Release History
 * ``APISite.article_path`` was removed. :attr:`APISite.articlepath
   <pywikibot.site._apisite.APISite.articlepath>` can be used instead.
 * ``fix_digits`` method of :class:`textlib.TimeStripper` was removed;
-  :func:`textlib.to_latin_digits` can be used instead.
+  :func:`textlib.to_ascii_digits` can be used instead.
 * :mod:`textlib`.tzoneFixedOffset class was removed in favour of
   :class:`time.TZoneFixedOffse<pywikibot.time.TZoneFixedOffset>`.
 * A boolean *watch* parameter in :meth:`page.BasePage.save` is desupported.
@@ -929,9 +1057,9 @@ Release History
 **Improvements**
 
 * i18n updates for date.py
-* Add number transliteration of 'lo', 'ml', 'pa', 'te' to NON_LATIN_DIGITS
+* Add number transliteration of 'lo', 'ml', 'pa', 'te' to NON_ASCII_DIGITS
 * Detect range blocks with Page.is_blocked() method (:phab:`T301282`)
-* to_latin_digits() function was added to textlib as counterpart of to_local_digits() function
+* to_ascii_digits() function was added to textlib as counterpart of to_local_digits() function
 * api.Request.submit now handles search-title-disabled and search-text-disabled API Errors
 * A show_diff parameter  was added to Page.put() and Page.change_category()
 * Allow categories when saving IndexPage (:phab:`T299806`)
@@ -1956,7 +2084,7 @@ Release History
 * UploadBot got a filename prefix parameter (:phab:`T170123`)
 * cosmetic_changes is able to remove empty sections (:phab:`T140570`)
 * Pywikibot is following :pep:`396` versioning
-* pagegenerators AllpagesPageGenerator, CombinedPageGenerator, UnconnectedPageGenerator are deprecated
+* CombinedPageGenerator is deprecated, itertools.chain can be used instead
 * Some DayPageGenerator parameters has been renamed
 * unicodedata2, httpbin and Flask dependency was removed
   (:phab:`T102461`, :phab:`T108068`, :phab:`T178864`, :phab:`T193383`)

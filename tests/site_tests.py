@@ -28,8 +28,10 @@ from pywikibot.exceptions import (
 )
 from tests.aspects import (
     AlteredDefaultSiteTestCase,
+    DefaultDrySiteTestCase,
     DefaultSiteTestCase,
     DeprecationTestCase,
+    PatchingTestCase,
     TestCase,
     WikimediaDefaultSiteTestCase,
 )
@@ -54,8 +56,7 @@ class TestSiteObject(DefaultSiteTestCase):
         code = self.site.family.obsolete.get(self.code) or self.code
         expect = f"Site('{code}', '{self.family}')"
         reprs = repr(self.site)
-        self.assertTrue(reprs.endswith(expect),
-                        f'\n{reprs} does not end with {expect}')
+        self.assertEndsWith(reprs, expect)
 
     def test_constructors(self) -> None:
         """Test cases for site constructors."""
@@ -715,7 +716,7 @@ class TestSiteSysopWrite(TestCase):
         site.loadimageinfo(fp1, history=True)
         for v in fp1._file_revisions.values():
             if v['timestamp'] == ts1:
-                self.assertTrue(hasattr(v, 'userhidden'))
+                self.assertHasAttr(v, 'userhidden')
 
         # Multiple revisions
         site.deleterevs('oldimage', '20210314184415|20210314184430',
@@ -726,7 +727,7 @@ class TestSiteSysopWrite(TestCase):
         site.loadimageinfo(fp2, history=True)
         for v in fp2._file_revisions.values():
             if v['timestamp'] in (ts1, ts2):
-                self.assertTrue(hasattr(v, 'commenthidden'))
+                self.assertHasAttr(v, 'commenthidden')
 
         # Concurrently show and hide
         site.deleterevs('oldimage', ['20210314184415', '20210314184430'],
@@ -738,9 +739,9 @@ class TestSiteSysopWrite(TestCase):
         site.loadimageinfo(fp3, history=True)
         for v in fp3._file_revisions.values():
             if v['timestamp'] in (ts1, ts2):
-                self.assertFalse(hasattr(v, 'commenthidden'))
-                self.assertFalse(hasattr(v, 'userhidden'))
-                self.assertFalse(hasattr(v, 'filehidden'))
+                self.assertNotHasAttr(v, 'commenthidden')
+                self.assertNotHasAttr(v, 'userhidden')
+                self.assertNotHasAttr(v, 'filehidden')
 
         # Cleanup
         site.deleterevs('oldimage', [20210314184415, 20210314184430],
@@ -784,6 +785,83 @@ class TestSiteSysopWrite(TestCase):
         site.undelete(fp, 'pywikibot unit tests', fileids=[fileid])
 
 
+class TestRollbackPage(PatchingTestCase):
+
+    """Test rollbackpage site method."""
+
+    family = 'wikipedia'
+    code = 'test'
+    login = True
+
+    @staticmethod
+    @PatchingTestCase.patched(pywikibot.data.api.Request, '_simulate')
+    def _simulate(self, action):
+        """Patch api.Request._simulate. Note: self is the Request instance."""
+        if action == 'rollback':
+            result = {
+                'title': self._params['title'][0].title(),
+                'summary': self._params.get('summary',
+                                            ['Rollback simulation'])[0],
+                'last_revid': 381070,
+            }
+            return {action: result}
+
+        if action and config.simulate and self.write:
+            result = {'result': 'Success', 'nochange': ''}
+            return {action: result}
+
+        return None
+
+    @classmethod
+    def setUpClass(cls):
+        """Use sandbox page for tests."""
+        super().setUpClass()
+        cls.page = pywikibot.Page(cls.site, 'Sandbox')
+
+    def setUp(self):
+        """Patch has_right method."""
+        super().setUp()
+        self.patch(self.site, 'has_right', lambda right: True)
+
+    def test_missing_rights(self):
+        """Test missing rollback right."""
+        self.patch(self.site, 'has_right', lambda right: False)
+        with self.assertRaisesRegex(
+            Error,
+            rf'User "{self.site.user()}" does not have required user right'
+            ' "rollback" on site'
+        ):
+            self.site.rollbackpage(self.page, pageid=4711)
+
+    def test_exceptions(self):
+        """Test rollback exceptions."""
+        with self.assertRaisesRegex(
+            ValueError,
+            "The parameters 'page' and 'pageid' cannot be used together"
+        ):
+            self.site.rollbackpage(self.page, pageid=4711)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            r"One of parameters 'page' or 'pageid' is required\."
+        ):
+            self.site.rollbackpage()
+
+        with self.assertRaisesRegex(
+                NoPageError, r"Page -1 \(pageid\) doesn't exist\."):
+            self.site.rollbackpage(pageid=-1)
+
+    def test_rollback_simulation(self):
+        """Test rollback in simulate mode."""
+        result = self.site.rollbackpage(self.page)
+        self.assertIsInstance(result, dict)
+        self.assertEqual(result['title'], self.page.title())
+        self.assertEqual(result['last_revid'], 381070)
+        self.assertEqual(result['summary'], 'Rollback simulation')
+        result = self.site.rollbackpage(self.page, summary='Rollback test')
+        self.assertEqual(result['summary'], 'Rollback test')
+
+
 class TestUsernameInUsers(DefaultSiteTestCase):
 
     """Test that the user account can be found in users list."""
@@ -824,10 +902,9 @@ class TestSiteLoadRevisionsCaching(BasePageLoadRevisionsCachingTestBase,
 
     """Test site.loadrevisions() caching."""
 
-    def setUp(self) -> None:
-        """Setup tests."""
+    def setup_page(self) -> None:
+        """Set up test page."""
         self._page = self.get_mainpage(force=True)
-        super().setUp()
 
     def test_page_text(self) -> None:
         """Test site.loadrevisions() with Page.text."""
@@ -1041,28 +1118,23 @@ class TestLinktrails(TestCase):
                 self.assertEqual(site.linktrail(), linktrail)
 
 
-class TestSingleCodeFamilySite(AlteredDefaultSiteTestCase):
+class TestSingleCodeFamilySite(DefaultDrySiteTestCase):
 
     """Test single code family sites."""
 
-    sites = {
-        'i18n': {
-            'family': 'i18n',
-            'code': 'i18n',
-        },
-    }
+    family = 'i18n'
+    code = 'i18n'
 
     def test_twn(self) -> None:
         """Test translatewiki.net."""
         url = 'translatewiki.net'
-        site = self.get_site('i18n')
-        self.assertEqual(site.hostname(), url)
+        site = self.get_site()
         self.assertEqual(site.code, 'i18n')
         self.assertIsInstance(site.namespaces, Mapping)
         self.assertFalse(site.obsolete)
-        self.assertEqual(site.family.hostname('en'), url)
-        self.assertEqual(site.family.hostname('i18n'), url)
-        self.assertEqual(site.family.hostname('translatewiki'), url)
+        self.assertEqual(site.hostname(), url)
+        for code in 'en', 'i18n', 'translatewiki':
+            self.assertEqual(site.family.hostname(code), url)
 
 
 class TestSubdomainFamilySite(TestCase):
@@ -1131,7 +1203,7 @@ class TestProductionAndTestSite(AlteredDefaultSiteTestCase):
 
         site2 = pywikibot.Site('beta')
         self.assertEqual(site2.hostname(),
-                         'commons.wikimedia.beta.wmflabs.org')
+                         'commons.wikimedia.beta.wmcloud.org')
         self.assertEqual(site2.code, 'beta')
         self.assertFalse(site2.obsolete)
 
@@ -1250,8 +1322,6 @@ class TestPropertyNames(DefaultSiteTestCase):
             'unexpectedUnconnectedPage',
             'wikibase-badge-Q17437796',
             'wikibase-badge-Q17437798',
-            'wikibase-badge-Q17506997',
-            'wikibase-badge-Q17580674',
             'wikibase-badge-Q70894304',
             'wikibase_item',
         ):

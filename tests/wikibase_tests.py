@@ -50,10 +50,9 @@ class TestLoadRevisionsCaching(BasePageLoadRevisionsCachingTestBase,
 
     """Test site.loadrevisions() caching."""
 
-    def setUp(self) -> None:
-        """Setup test."""
+    def setup_page(self) -> None:
+        """Set up test page."""
         self._page = ItemPage(self.get_repo(), 'Q15169668')
-        super().setUp()
 
     def test_page_text(self) -> None:
         """Test site.loadrevisions() with Page.text."""
@@ -67,7 +66,7 @@ class TestGeneral(WikidataTestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
-        """Setup test class."""
+        """Set up test class."""
         super().setUpClass()
         enwiki = pywikibot.Site('en', 'wikipedia')
         cls.mainpage = pywikibot.Page(pywikibot.page.Link('Main Page', enwiki))
@@ -91,7 +90,7 @@ class TestGeneral(WikidataTestCase):
         item2 = ItemPage(repo, 'q5296')
         self.assertEqual(item2.getID(), 'Q5296')
         item2.get()
-        self.assertTrue(item2.labels['en'].lower().endswith('main page'))
+        self.assertEndsWith(item2.labels['en'].lower(), 'main page')
         prop = PropertyPage(repo, 'Property:P21')
         self.assertEqual(prop.type, 'wikibase-item')
         self.assertEqual(prop.namespace(), 120)
@@ -164,7 +163,7 @@ class TestLoadUnknownType(WikidataTestCase):
     dry = True
 
     def setUp(self) -> None:
-        """Setup test."""
+        """Set up test."""
         super().setUp()
         wikidata = self.get_repo()
         self.wdp = ItemPage(wikidata, 'Q60')
@@ -231,12 +230,12 @@ class TestItemLoad(WikidataTestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
-        """Setup test class."""
+        """Set up test class."""
         super().setUpClass()
         cls.site = cls.get_site('enwiki')
 
     def setUp(self) -> None:
-        """Setup test."""
+        """Set up test."""
         super().setUp()
         self.nyc = pywikibot.Page(pywikibot.page.Link('New York City',
                                                       self.site))
@@ -248,14 +247,14 @@ class TestItemLoad(WikidataTestCase):
         self.assertEqual(item._link._title, 'Q60')
         self.assertEqual(item._defined_by(), {'ids': 'Q60'})
         self.assertEqual(item.id, 'Q60')
-        self.assertFalse(hasattr(item, '_title'))
-        self.assertFalse(hasattr(item, '_site'))
+        self.assertNotHasAttr(item, '_title')
+        self.assertNotHasAttr(item, '_site')
         self.assertEqual(item.title(), 'Q60')
         self.assertEqual(item.getID(), 'Q60')
         self.assertEqual(item.getID(numeric=True), 60)
-        self.assertFalse(hasattr(item, '_content'))
+        self.assertNotHasAttr(item, '_content')
         item.get()
-        self.assertTrue(hasattr(item, '_content'))
+        self.assertHasAttr(item, '_content')
 
     def test_item_lazy_initialization(self) -> None:
         """Test that Wikibase items are properly initialized lazily."""
@@ -279,14 +278,14 @@ class TestItemLoad(WikidataTestCase):
         item = ItemPage(wikidata, '-1')
         self.assertEqual(item._link._title, '-1')
         item.id = 'Q60'
-        self.assertFalse(hasattr(item, '_content'))
+        self.assertNotHasAttr(item, '_content')
         self.assertEqual(item.getID(), 'Q60')
-        self.assertFalse(hasattr(item, '_content'))
+        self.assertNotHasAttr(item, '_content')
         item.get()
-        self.assertTrue(hasattr(item, '_content'))
-        self.assertIn('en', item.labels)
+        self.assertHasAttr(item, '_content')
+        self.assertIn('mul', item.labels)
         # label could change
-        self.assertIn(item.labels['en'], ['New York', 'New York City'])
+        self.assertIn(item.labels['mul'], ['New York', 'New York City'])
         self.assertEqual(item.title(), 'Q60')
 
     def test_reuse_item_set_id(self) -> None:
@@ -301,7 +300,7 @@ class TestItemLoad(WikidataTestCase):
         wikidata = self.get_repo()
         item = ItemPage(wikidata, 'Q60')
         item.get()
-        self.assertIn(item.labels['en'], label)
+        self.assertIn(item.labels['mul'], label)
 
         # When the id attribute is modified, the ItemPage goes into
         # an inconsistent state.
@@ -313,7 +312,7 @@ class TestItemLoad(WikidataTestCase):
         # it doesn't help to clear this piece of saved state.
         del item._content
         # The labels are not updated; assertion showing undesirable behaviour:
-        self.assertIn(item.labels['en'], label)
+        self.assertIn(item.labels['mul'], label)
 
     def test_empty_item(self) -> None:
         """Test empty wikibase item.
@@ -325,8 +324,12 @@ class TestItemLoad(WikidataTestCase):
         item = ItemPage(wikidata)
         self.assertEqual(item._link._title, '-1')
         self.assertLength(item.labels, 0)
+        self.assertEqual(str(item.labels), 'LanguageDict({})')
+        self.assertEqual(repr(item.labels), 'LanguageDict({})')
         self.assertLength(item.descriptions, 0)
         self.assertLength(item.aliases, 0)
+        self.assertEqual(str(item.aliases), 'AliasesDict({})')
+        self.assertEqual(repr(item.aliases), 'AliasesDict({})')
         self.assertLength(item.claims, 0)
         self.assertLength(item.sitelinks, 0)
 
@@ -363,24 +366,24 @@ class TestItemLoad(WikidataTestCase):
         item = ItemPage(wikidata, 'Q7')
         self.assertEqual(item._link._title, 'Q7')
         self.assertEqual(item.title(), 'Q7')
-        self.assertFalse(hasattr(item, '_content'))
+        self.assertNotHasAttr(item, '_content')
         self.assertEqual(item.id, 'Q7')
         self.assertEqual(item.getID(), 'Q7')
         numeric_id = item.getID(numeric=True)
         self.assertIsInstance(numeric_id, int)
         self.assertEqual(numeric_id, 7)
-        self.assertFalse(hasattr(item, '_content'))
+        self.assertNotHasAttr(item, '_content')
         regex = r"^Page .+ doesn't exist\.$"
         with self.assertRaisesRegex(NoPageError, regex):
             item.get()
-        self.assertTrue(hasattr(item, '_content'))
+        self.assertHasAttr(item, '_content')
         self.assertEqual(item.id, 'Q7')
         self.assertEqual(item.getID(), 'Q7')
         self.assertEqual(item._link._title, 'Q7')
         self.assertEqual(item.title(), 'Q7')
         with self.assertRaisesRegex(NoPageError, regex):
             item.get()
-        self.assertTrue(hasattr(item, '_content'))
+        self.assertHasAttr(item, '_content')
         self.assertEqual(item._link._title, 'Q7')
         self.assertEqual(item.getID(), 'Q7')
         self.assertEqual(item.title(), 'Q7')
@@ -401,10 +404,10 @@ class TestItemLoad(WikidataTestCase):
         page = self.nyc
         item = ItemPage.fromPage(page)
         self.assertEqual(item._link._title, '-1')
-        self.assertTrue(hasattr(item, 'id'))
-        self.assertTrue(hasattr(item, '_content'))
+        self.assertHasAttr(item, 'id')
+        self.assertHasAttr(item, '_content')
         self.assertEqual(item.title(), 'Q60')
-        self.assertTrue(hasattr(item, '_content'))
+        self.assertHasAttr(item, '_content')
         self.assertEqual(item.id, 'Q60')
         self.assertEqual(item.getID(), 'Q60')
         self.assertEqual(item.getID(numeric=True), 60)
@@ -416,10 +419,10 @@ class TestItemLoad(WikidataTestCase):
         page = pywikibot.Page(self.nyc.site, self.nyc.title() + '#foo')
         item = ItemPage.fromPage(page)
         self.assertEqual(item._link._title, '-1')
-        self.assertTrue(hasattr(item, 'id'))
-        self.assertTrue(hasattr(item, '_content'))
+        self.assertHasAttr(item, 'id')
+        self.assertHasAttr(item, '_content')
         self.assertEqual(item.title(), 'Q60')
-        self.assertTrue(hasattr(item, '_content'))
+        self.assertHasAttr(item, '_content')
         self.assertEqual(item.id, 'Q60')
         self.assertEqual(item.getID(), 'Q60')
         self.assertEqual(item.getID(numeric=True), 60)
@@ -434,18 +437,18 @@ class TestItemLoad(WikidataTestCase):
         item = ItemPage.fromPage(page)
         self.assertEqual(item._link._title, 'Q60')
         self.assertEqual(item.id, 'Q60')
-        self.assertFalse(hasattr(item, '_content'))
+        self.assertNotHasAttr(item, '_content')
         self.assertEqual(item.title(), 'Q60')
-        self.assertFalse(hasattr(item, '_content'))
+        self.assertNotHasAttr(item, '_content')
         self.assertEqual(item.id, 'Q60')
         self.assertEqual(item.getID(), 'Q60')
         self.assertEqual(item.getID(numeric=True), 60)
-        self.assertFalse(hasattr(item, '_content'))
+        self.assertNotHasAttr(item, '_content')
         item.get()
-        self.assertTrue(hasattr(item, '_content'))
+        self.assertHasAttr(item, '_content')
         self.assertTrue(item.exists())
         item2 = ItemPage.fromPage(page)
-        self.assertTrue(item is item2)
+        self.assertIs(item, item2)
 
     def test_fromPage_lazy(self) -> None:
         """Test item from page with lazy_load."""
@@ -454,10 +457,10 @@ class TestItemLoad(WikidataTestCase):
         self.assertEqual(item._defined_by(),
                          {'sites': 'enwiki', 'titles': 'New York City'})
         self.assertEqual(item._link._title, '-1')
-        self.assertFalse(hasattr(item, 'id'))
-        self.assertFalse(hasattr(item, '_content'))
+        self.assertNotHasAttr(item, 'id')
+        self.assertNotHasAttr(item, '_content')
         self.assertEqual(item.title(), 'Q60')
-        self.assertTrue(hasattr(item, '_content'))
+        self.assertHasAttr(item, '_content')
         self.assertEqual(item.id, 'Q60')
         self.assertEqual(item.getID(), 'Q60')
         self.assertEqual(item.getID(numeric=True), 60)
@@ -482,10 +485,10 @@ class TestItemLoad(WikidataTestCase):
 
                 item = ItemPage.fromPage(page, lazy_load=True)
 
-                self.assertFalse(hasattr(item, 'id'))
-                self.assertTrue(hasattr(item, '_title'))
-                self.assertTrue(hasattr(item, '_site'))
-                self.assertFalse(hasattr(item, '_content'))
+                self.assertNotHasAttr(item, 'id')
+                self.assertHasAttr(item, '_title')
+                self.assertHasAttr(item, '_site')
+                self.assertNotHasAttr(item, '_content')
 
                 self.assertEqual(item._link._title, '-1')
                 # the method 'exists' does not raise an exception
@@ -1013,10 +1016,9 @@ class TestItemBasePageMethods(WikidataTestCase, BasePageMethodsTestBase):
 
     """Test behavior of ItemPage methods inherited from BasePage."""
 
-    def setUp(self) -> None:
-        """Setup tests."""
+    def setup_page(self) -> None:
+        """Set up test page."""
         self._page = ItemPage(self.get_repo(), 'Q60')
-        super().setUp()
 
     def test_basepage_methods(self) -> None:
         """Test ItemPage methods inherited from superclass BasePage."""
@@ -1033,10 +1035,9 @@ class TestPageMethodsWithItemTitle(WikidataTestCase, BasePageMethodsTestBase):
 
     """Test behavior of Page methods for wikibase item."""
 
-    def setUp(self) -> None:
-        """Setup tests."""
+    def setup_page(self) -> None:
+        """Set up tests."""
         self._page = pywikibot.Page(self.site, 'Q60')
-        super().setUp()
 
     def test_basepage_methods(self) -> None:
         """Test Page methods inherited from superclass BasePage with Q60."""
@@ -1065,7 +1066,7 @@ class TestLinks(WikidataTestCase):
     }
 
     def setUp(self) -> None:
-        """Setup Tests."""
+        """Set up tests."""
         super().setUp()
         self.wdp = ItemPage(self.get_repo(), 'Q60')
         self.wdp.id = 'Q60'
@@ -1099,7 +1100,7 @@ class TestWriteNormalizeData(TestCase):
     net = False
 
     def setUp(self) -> None:
-        """Setup tests."""
+        """Set up tests."""
         super().setUp()
         self.data_out = {
             'labels': {'en': {'language': 'en', 'value': 'Foo'}},
@@ -1129,6 +1130,14 @@ class TestWriteNormalizeData(TestCase):
         response = ItemPage._normalizeData(
             copy.deepcopy(self.data_out))
         self.assertEqual(response, self.data_out)
+
+    def test_normalized_invalid_data(self) -> None:
+        """Test _normalizeData() method for invalid data."""
+        data = copy.deepcopy(self.data_out)
+        data['aliases']['en'] = tuple(data['aliases']['en'])
+        with self.assertRaisesRegex(TypeError,
+                                    "Unsupported value type 'tuple'"):
+            ItemPage._normalizeData(data)
 
 
 class TestPreloadingEntityGenerator(TestCase):
@@ -1290,7 +1299,7 @@ class TestAlternateNamespaces(WikidataTestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
-        """Setup test class."""
+        """Set up test class."""
         super().setUpClass()
 
         cls.get_repo()._namespaces = NamespacesDict({
@@ -1427,7 +1436,7 @@ class TestJSON(WikidataTestCase):
     """Test cases to test toJSON() functions."""
 
     def setUp(self) -> None:
-        """Setup test."""
+        """Set up test."""
         super().setUp()
         wikidata = self.get_repo()
         self.wdp = ItemPage(wikidata, 'Q60')
@@ -1439,6 +1448,31 @@ class TestJSON(WikidataTestCase):
         del self.wdp._content['type']
         del self.wdp._content['lastrevid']
         del self.wdp._content['pageid']
+
+    def test_base_data(self) -> None:
+        """Test labels and aliases collections."""
+        item = self.wdp
+        self.assertIn('en', item.labels)
+        self.assertEqual(item.labels['en'], 'New York City')
+        self.assertIn('en', item.aliases)
+        self.assertIn('NYC', item.aliases['en'])
+
+    def test_str_repr(self) -> None:
+        """Test str and repr of labels and aliases."""
+        self.assertEqual(
+            str(self.wdp.labels),
+            "LanguageDict({'af': 'New York Stad', 'als': 'New York City', "
+            "'am': 'ኒው ዮርክ ከተማ', 'an': 'Nueva York', ...})"
+        )
+        self.assertEqual(
+            str(self.wdp.aliases),
+            "AliasesDict({'be': ['Горад Нью-Ёрк'], 'be-tarask': ['Нью Ёрк'], "
+            "'ca': ['Ciutat de Nova York', 'New York City',"
+            " 'New York City (New York)', 'NYC', 'N. Y.', 'N Y'], "
+            "'da': ['New York City'], ...})"
+        )
+        self.assertEqual(str(self.wdp.labels), repr(self.wdp.labels))
+        self.assertEqual(str(self.wdp.aliases), repr(self.wdp.aliases))
 
     def test_itempage_json(self) -> None:
         """Test itempage json."""
@@ -1498,6 +1532,47 @@ class TestJSON(WikidataTestCase):
         }
         diff = self.wdp.toJSON(diffto=self.wdp._content)
         self.assertEqual(diff, expected)
+
+
+class TestHighLevelApi(WikidataTestCase):
+
+    """Test high-level API for Wikidata."""
+
+    def test_get_best_claim(self) -> None:
+        """Test getting the best claim for a property."""
+        wikidata = self.get_repo()
+        item = pywikibot.ItemPage(wikidata, 'Q90')
+        item.get()
+        self.assertEqual(item.get_best_claim('P17').getTarget(),
+                         pywikibot.ItemPage(wikidata, 'Q142'))
+
+    def test_get_value_at_timestamp(self) -> None:
+        """Test getting the value of a claim at a specific timestamp."""
+        wikidata = self.get_repo()
+        item = pywikibot.ItemPage(wikidata, 'Q90')
+        item.get()
+        wbtime = pywikibot.WbTime(year=2021, month=1, day=1, site=wikidata)
+        claim = item.get_value_at_timestamp('P17', wbtime)
+        self.assertEqual(claim, pywikibot.ItemPage(wikidata, 'Q142'))
+
+    def test_with_monolingual_good_language(self) -> None:
+        """Test getting a monolingual text claim with a good language."""
+        wikidata = self.get_repo()
+        item = pywikibot.ItemPage(wikidata, 'Q183')
+        item.get()
+        wbtime = pywikibot.WbTime(year=2021, month=1, day=1, site=wikidata)
+        claim = item.get_value_at_timestamp('P1448', wbtime, 'ru')
+        self.assertIsInstance(claim, pywikibot.WbMonolingualText)
+        self.assertEqual(claim.language, 'ru')
+
+    def test_with_monolingual_wrong_language(self) -> None:
+        """Test getting a monolingual text claim with a wrong language."""
+        wikidata = self.get_repo()
+        item = pywikibot.ItemPage(wikidata, 'Q183')
+        item.get()
+        wbtime = pywikibot.WbTime(year=2021, month=1, day=1, site=wikidata)
+        claim = item.get_value_at_timestamp('P1448', wbtime, 'en')
+        self.assertIsNone(claim, None)
 
 
 if __name__ == '__main__':

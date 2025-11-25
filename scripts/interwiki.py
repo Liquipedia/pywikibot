@@ -274,8 +274,8 @@ The following arguments are only important for users who have accounts
 for multiple languages, and specify on which sites the bot should modify
 pages:
 
--localonly      Only work on the local wiki, not on other wikis in the
-                family I have a login at.
+-localonly      Process only pages from the default site; ignore pages
+                from other family members.
 
 -limittwo       Only update two pages - one in the local wiki (if
                 logged-in) and one in the top available one. For example,
@@ -341,6 +341,10 @@ the subjects in that list. After finishing the dump file will be deleted.
 To run the script on all pages on a language, run it with option
 ``-start:!``, and if it takes so long that you have to break it off, use
 ``-continue`` next time.
+
+.. versionchanged:: 10.4
+   The ``-localonly`` option now restricts page processing to the
+   default site only, instead of the origin page.
 """
 #
 # (C) Pywikibot team, 2003-2025
@@ -384,6 +388,7 @@ from pywikibot.exceptions import (
     NoPageError,
     NoUsernameError,
     PageSaveRelatedError,
+    SectionError,
     ServerError,
     SiteDefinitionError,
     SpamblacklistError,
@@ -442,46 +447,46 @@ class InterwikiBotConfig:
 
     """Container class for interwikibot's settings."""
 
-    autonomous = False
-    confirm = False
     always = False
-    select = False
-    followredirect = True
-    initialredirect = False
-    force = False
-    cleanup = False
-    remove = []
-    maxquerysize = 50
-    same = False
-    skip = set()
-    skipauto = False
-    untranslated = False
-    untranslatedonly = False
-    auto = True
-    neverlink = []
-    showtextlink = 0
-    showtextlinkadd = 300
-    localonly = False
-    limittwo = False
-    strictlimittwo = False
-    needlimit = 0
-    ignore = []
-    parenthesesonly = False
-    rememberno = False
-    followinterwiki = True
-    minsubjects = config.interwiki_min_subjects
-    nobackonly = False
     askhints = False
+    asynchronous = False
+    auto = True
+    autonomous = False
+    cleanup = False
+    confirm = False
+    followinterwiki = True
+    followredirect = True
+    force = False
     hintnobracket = False
     hints = []
     hintsareright = False
+    ignore = []
+    initialredirect = False
+    limittwo = False
+    localonly = False
     lacklanguage = None
+    maxquerysize = 50
     minlinks = 0
+    minsubjects = config.interwiki_min_subjects
+    needlimit = 0
+    neverlink = []
+    nobackonly = False
+    parenthesesonly = False
     quiet = False
-    restore_all = False
-    asynchronous = False
-    summary = ''
+    rememberno = False
+    remove = []
     repository = False
+    restore_all = False
+    same = False
+    select = False
+    showtextlink = 0
+    showtextlinkadd = 300
+    skip = set()
+    skipauto = False
+    strictlimittwo = False
+    summary = ''
+    untranslated = False
+    untranslatedonly = False
 
     def note(self, text: str) -> None:
         """Output a notification message with.
@@ -671,6 +676,8 @@ class Subject(interwiki_graph.Subject):
         self.hintsAsked = False
         self.forcedStop = False
         self.workonme = True
+        # default site for -localonly option
+        self.site = pywikibot.Site()
 
     def getFoundDisambig(self, site):
         """Return the first disambiguation found.
@@ -1129,7 +1136,7 @@ class Subject(interwiki_graph.Subject):
 
         # must be behind the page.isRedirectPage() part
         # otherwise a redirect error would be raised
-        if page_empty_check(page):
+        if self.page_empty_check(page):
             self.conf.remove.append(str(page))
             self.conf.note(f'{page} is empty. Skipping.')
             if page == self.origin:
@@ -1512,32 +1519,55 @@ class Subject(interwiki_graph.Subject):
                         break
 
     def process_unlimited(self, new, updated) -> None:
-        """Post process unlimited."""
-        for (site, page) in new.items():
-            # if we have an account for this site
-            if site.family.name in config.usernames \
-               and site.code in config.usernames[site.family.name] \
-               and not site.has_data_repository:
-                # Try to do the changes
-                try:
-                    if self.replaceLinks(page, new):
-                        # Page was changed
-                        updated.append(site)
-                except SaveError:
-                    pass
-                except GiveUpOnPage:
-                    break
+        """Post-process pages: replace links and track updated sites."""
+        for site, page in new.items():
+            if site.has_data_repository:
+                self.conf.note(
+                    f'{site} has a data repository, skipping {page}'
+                )
+                continue
 
-    def replaceLinks(self, page, newPages) -> bool:
-        """Return True if saving was successful."""
-        # In this case only continue on the Page we started with
-        if self.conf.localonly and page != self.origin:
-            raise SaveError('-localonly and page != origin')
+            # Check if a username is configured for this site
+            codes = config.usernames.get(site.family.name, [])
+            if site.code not in codes:
+                pywikibot.warning(
+                    f'username for {site} is not given in your user-config.py'
+                )
+                continue
+
+            # Try to do the changes
+            try:
+                changed = self.replaceLinks(page, new)
+            except SaveError:
+                continue
+            except GiveUpOnPage:
+                break
+
+            if changed:
+                updated.append(site)
+
+    def _fetch_text(self, page: pywikibot.Page) -> str:
+        """Validate page and load its content for editing.
+
+        This includes checking for:
+        - `-localonly` flag and whether the page is on default site
+        - Section-only pages (pages with `#section`)
+        - Non-existent pages
+        - Empty pages
+
+        :param page: The page to check.
+        :return: The text content of the page if it passes all checks.
+        :raises SaveError: If the page is not eligible for editing.
+        """
+        # In this case only continue on the Page if on default site
+        if self.conf.localonly and page.site != self.site:
+            raise SaveError(f'-localonly: {page} is on site {page.site}; '
+                            f'only {self.site} is accepted with this option.')
 
         if page.section():
             # This is not a page, but a subpage. Do not edit it.
-            pywikibot.info(
-                f'Not editing {page}: not doing interwiki on subpages')
+            pywikibot.info(f'Not editing {page}: interwiki not done on'
+                           ' subpages (#section)')
             raise SaveError('Link has a #section')
 
         try:
@@ -1546,9 +1576,15 @@ class Subject(interwiki_graph.Subject):
             pywikibot.info(f'Not editing {page}: page does not exist')
             raise SaveError("Page doesn't exist")
 
-        if page_empty_check(page):
+        if self.page_empty_check(page):
             pywikibot.info(f'Not editing {page}: page is empty')
             raise SaveError('Page is empty.')
+
+        return pagetext
+
+    def replaceLinks(self, page, newPages) -> bool:
+        """Return True if saving was successful."""
+        pagetext = self._fetch_text(page)
 
         # clone original newPages dictionary, so that we can modify it to the
         # local page's needs
@@ -1787,6 +1823,34 @@ class Subject(interwiki_graph.Subject):
                 if linkedPage.site not in expectedSites:
                     pywikibot.warning(f'{page.site.family.name}: {page} links '
                                       f'to incorrect {linkedPage}')
+
+    @staticmethod
+    def page_empty_check(page: pywikibot.Page) -> bool:
+        """Return True if page should be skipped as it is almost empty.
+
+        Pages in content namespaces are considered empty if they contain
+        fewer than 50 characters, and other pages are considered empty if
+        they are not category pages and contain fewer than 4 characters
+        excluding interlanguage links and categories.
+        """
+        try:
+            txt = page.text
+        except SectionError:
+            # Section doesn't exist — treat page as empty
+            return True
+
+        # Check if the page is in content namespace
+        if page.namespace().content:
+            # Check if the page contains at least 50 characters
+            return len(txt) < 50
+
+        if not page.is_categorypage():
+            site = page.site
+            txt = textlib.removeLanguageLinks(txt, site=site)
+            txt = textlib.removeCategoryLinks(txt, site=site)
+            return len(txt.strip()) < 4
+
+        return False
 
 
 class InterwikiBot:
@@ -2098,28 +2162,6 @@ def botMayEdit(page) -> bool:
             if template[0].title(with_ns=False).lower() in tmpl:
                 return False
     return True
-
-
-def page_empty_check(page) -> bool:
-    """Return True if page should be skipped as it is almost empty.
-
-    Pages in content namespaces are considered empty if they contain
-    less than 50 characters, and other pages are considered empty if
-    they are not category pages and contain less than 4 characters
-    excluding interlanguage links and categories.
-    """
-    txt = page.text
-    # Check if the page is in content namespace
-    if page.namespace().content:
-        # Check if the page contains at least 50 characters
-        return len(txt) < 50
-
-    if not page.is_categorypage():
-        txt = textlib.removeLanguageLinks(txt, site=page.site)
-        txt = textlib.removeCategoryLinks(txt, site=page.site)
-        return len(txt) < 4
-
-    return False
 
 
 class InterwikiDumps(OptionHandler):

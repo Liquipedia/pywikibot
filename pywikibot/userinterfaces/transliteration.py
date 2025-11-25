@@ -1,16 +1,20 @@
 """Module to transliterate text."""
 #
-# (C) Pywikibot team, 2006-2024
+# (C) Pywikibot team, 2006-2025
 #
 # Distributed under the terms of the MIT license.
 #
 from __future__ import annotations
 
-from pywikibot.tools import ModuleDeprecationWrapper, deprecate_arg
+from pywikibot.tools import (
+    ModuleDeprecationWrapper,
+    deprecate_arg,
+    deprecated_signature,
+)
 
 
-#: Non latin digits used by the framework
-NON_LATIN_DIGITS = {
+#: Non ascii digits used by the framework
+NON_ASCII_DIGITS = {
     'bn': '০১২৩৪৫৬৭৮৯',
     'ckb': '٠١٢٣٤٥٦٧٨٩',
     'fa': '۰۱۲۳۴۵۶۷۸۹',
@@ -70,11 +74,11 @@ _trans = {
     'Ṉ': 'N', 'Ṋ': 'N', 'Ɲ': 'N', 'ɲ': 'n', 'Ƞ': 'N', 'ǹ': 'n', 'ń': 'n',
     'ñ': 'n', 'ņ': 'n', 'ň': 'n', 'ṅ': 'n', 'ṇ': 'n', 'ṉ': 'n', 'ṋ': 'n',
     'ƞ': 'n', 'Ò': 'O', 'Ó': 'O', 'Ô': 'O', 'Õ': 'O', 'Ṍ': 'O', 'Ṏ': 'O',
-    'Ȭ': 'O', 'Ö': 'O', 'Ō': 'O', 'Ṑ': 'O', 'Ṓ': 'O', 'Ŏ': 'O', 'Ǒ': 'O',
+    'Ȭ': 'O', 'Ö': 'Oe', 'Ō': 'O', 'Ṑ': 'O', 'Ṓ': 'O', 'Ŏ': 'O', 'Ǒ': 'O',
     'Ȯ': 'O', 'Ȱ': 'O', 'Ọ': 'O', 'Ǫ': 'O', 'Ǭ': 'O', 'Ơ': 'O', 'Ờ': 'O',
     'Ớ': 'O', 'Ỡ': 'O', 'Ợ': 'O', 'Ở': 'O', 'Ỏ': 'O', 'Ɵ': 'O', 'Ø': 'O',
     'Ǿ': 'O', 'ò': 'o', 'ó': 'o', 'ô': 'o', 'õ': 'o', 'ṍ': 'o', 'ṏ': 'o',
-    'ȭ': 'o', 'ö': 'o', 'ō': 'o', 'ṑ': 'o', 'ṓ': 'o', 'ŏ': 'o', 'ǒ': 'o',
+    'ȭ': 'o', 'ö': 'oe', 'ō': 'o', 'ṑ': 'o', 'ṓ': 'o', 'ŏ': 'o', 'ǒ': 'o',
     'ȯ': 'o', 'ȱ': 'o', 'ọ': 'o', 'ǫ': 'o', 'ǭ': 'o', 'ơ': 'o', 'ờ': 'o',
     'ớ': 'o', 'ỡ': 'o', 'ợ': 'o', 'ở': 'o', 'ỏ': 'o', 'ɵ': 'o', 'ø': 'o',
     'ǿ': 'o', 'Ȍ': 'Ö', 'Ő': 'Ö', 'Ȫ': 'Ö', 'ȍ': 'ö', 'ő': 'ö', 'ȫ': 'ö',
@@ -90,10 +94,10 @@ _trans = {
     'Ṭ': 'T', 'Ṯ': 'T', 'Ṱ': 'T', 'Ŧ': 'T', 'Ƭ': 'T', 'Ʈ': 'T', 'ţ': 't',
     'ț': 't', 'ť': 't', 'ṫ': 't', 'ṭ': 't', 'ṯ': 't', 'ṱ': 't', 'ŧ': 't',
     'Ⱦ': 't', 'ƭ': 't', 'ʈ': 't', 'Ù': 'U', 'Ú': 'U', 'Ũ': 'U', 'Ṹ': 'U',
-    'Ṵ': 'U', 'Ü': 'U', 'Ṳ': 'U', 'Ū': 'U', 'Ṻ': 'U', 'Ŭ': 'U', 'Ụ': 'U',
+    'Ṵ': 'U', 'Ü': 'Ue', 'Ṳ': 'U', 'Ū': 'U', 'Ṻ': 'U', 'Ŭ': 'U', 'Ụ': 'U',
     'Ů': 'U', 'Ų': 'U', 'Ǔ': 'U', 'Ṷ': 'U', 'Ủ': 'U', 'Ư': 'U', 'Ữ': 'U',
     'Ự': 'U', 'Ử': 'U', 'ù': 'u', 'ú': 'u', 'ũ': 'u', 'ṹ': 'u', 'ṵ': 'u',
-    'ü': 'u', 'ṳ': 'u', 'ū': 'u', 'ṻ': 'u', 'ŭ': 'u', 'ụ': 'u', 'ů': 'u',
+    'ü': 'ue', 'ṳ': 'u', 'ū': 'u', 'ṻ': 'u', 'ŭ': 'u', 'ụ': 'u', 'ů': 'u',
     'ų': 'u', 'ǔ': 'u', 'ṷ': 'u', 'ủ': 'u', 'ư': 'u', 'ữ': 'u', 'ự': 'u',
     'ử': 'u', 'Ȕ': 'Ü', 'Ű': 'Ü', 'Ǜ': 'Ü', 'Ǘ': 'Ü', 'Ǖ': 'Ü', 'Ǚ': 'Ü',
     'ȕ': 'ü', 'ű': 'ü', 'ǜ': 'ü', 'ǘ': 'ü', 'ǖ': 'ü', 'ǚ': 'ü', 'Û': 'Ux',
@@ -113,12 +117,14 @@ _trans = {
     'Ƣ': 'G', 'ᵷ': 'g', 'ɣ': 'g', 'ƣ': 'g', 'ᵹ': 'g', 'Ƅ': 'H', 'ƅ': 'h',
     'Ƕ': 'Wh', 'ƕ': 'wh', 'Ɩ': 'I', 'ɩ': 'i', 'Ŋ': 'Ng', 'ŋ': 'ng', 'Œ': 'OE',
     'œ': 'oe', 'Ɔ': 'O', 'ɔ': 'o', 'Ȣ': 'Ou', 'ȣ': 'ou', 'Ƽ': 'Q', 'ĸ': 'q',
-    'ƽ': 'q', 'ȹ': 'qp', '\uf20e': 'r', 'ſ': 's', 'ß': 'ss', 'Ʃ': 'Sh',
-    'ʃ': 'sh', 'ᶋ': 'sh', 'Ʉ': 'U', 'ʉ': 'u', 'Ʌ': 'V', 'ʌ': 'v', 'Ɯ': 'W',
-    'Ƿ': 'W', 'ɯ': 'w', 'ƿ': 'w', 'Ȝ': 'Y', 'ȝ': 'y', 'Ĳ': 'IJ', 'ĳ': 'ij',
-    'Ƨ': 'Z', 'ʮ': 'z', 'ƨ': 'z', 'Ʒ': 'Zh', 'ʒ': 'zh', 'Ǯ': 'Dzh', 'ǯ': 'dzh',
-    'Ƹ': "'", 'ƹ': "'", 'ʔ': "'", 'ˀ': "'", 'Ɂ': "'", 'ɂ': "'", 'Þ': 'Th',
-    'þ': 'th', 'C': '!', 'ʗ': '!', 'ǃ': '!',
+    'ƽ': 'q', 'ȹ': 'qp', 'ſ': 's', 'ß': 'ss', 'Ĳ': 'IJ', 'ĳ': 'ij', 'Ɯ': 'W',
+    'Ƿ': 'W', 'ƿ': 'w', 'Ȝ': 'Y', 'ȝ': 'y', 'Ƨ': 'Z', 'ƨ': 'z', 'Ʒ': 'Zh',
+    'ʒ': 'zh', 'Ǯ': 'Dzh', 'ǯ': 'dzh', 'Þ': 'Th', 'þ': 'th',
+    # International Phonetic Alphabet
+    'ʃ': 'sh', 'ᶋ': 'sh', 'Ʉ': 'U', 'ʉ': 'u', 'Ʌ': 'V', 'ʌ': 'v', 'ʔ': "'",
+    'ˀ': "'", 'Ɂ': "'", 'ɂ': "'", 'ʗ': '!', 'ǃ': '!', 'Ƹ': "'", 'ƹ': "'",
+    # Private Use Area
+    '': 'r',
     # Punctuation and typography
     '«': '"', '»': '"', '“': '"', '”': '"', '„': '"', '¨': '"', '‘': "'",
     '’': "'", '′': "'", '@': '(at)', '¤': '$', '¢': 'c', '€': 'E', '£': 'L',
@@ -193,7 +199,6 @@ _trans = {
     'ى': 'á', 'ﻯ': 'á', 'ﻰ': 'á', 'ﯼ': 'y', 'ﯽ': 'y', 'ﯿ': 'y', 'ﯾ': 'y',
     'ﻻ': 'la', 'ﻼ': 'la', 'ﷲ': 'llah', 'إ': "a'", 'أ': "a'", 'ؤ': "w'",
     'ئ': "y'",
-    '◌': 'iy',  # indicates absence of vowels
     # Perso-Arabic
     'پ': 'p', 'ﭙ': 'p', 'چ': 'ch', 'ژ': 'zh', 'گ': 'g', 'ﮔ': 'g', 'ﮕ': 'g',
     'ﮓ': 'g',
@@ -1096,7 +1101,7 @@ _trans = {
     '𐬳': 'shye', '𐬴': 'sshe', '𐬵': 'he',
 }
 
-for digits in NON_LATIN_DIGITS.values():
+for digits in NON_ASCII_DIGITS.values():
     _trans.update({char: str(i) for i, char in enumerate(digits)})
 
 
@@ -1117,23 +1122,29 @@ class Transliterator:
                 continue
             while (value.encode(encoding, 'replace').decode(encoding) == '?'
                    and value in trans):
-                value = trans[value]
+                value = trans[value]  # pragma: no cover
             trans[char] = value
         self.trans = trans
 
     @deprecate_arg('next', 'succ')  # since 9.0
-    def transliterate(self, char: str, default: str = '?',
+    @deprecated_signature(since='10.6.0')
+    def transliterate(self, char: str, /, default: str = '?', *,
                       prev: str = '-', succ: str = '-') -> str:
         """Transliterate the character.
 
         .. versionchanged:: 9.0
            *next* parameter was renamed to *succ*.
+        .. versionchanged:: 10.6
+           *char* argument is positional only; *prev* and *succ*
+           arguments are keyword only.
 
         :param char: The character to transliterate.
-        :param default: The character used when there is no transliteration.
+        :param default: The character used when there is no
+            transliteration.
         :param prev: The previous character
         :param succ: The succeeding character
-        :return: The transliterated character which may be an empty string
+        :return: The transliterated character which may be an empty
+            string
         """
         result = default
         if char in self.trans:
@@ -1148,9 +1159,12 @@ class Transliterator:
             result = prev
         # Lao
         elif char == 'ຫ':
-            result = '' if next in 'ງຍນຣລຼຼວ' else 'h'
+            result = '' if succ in 'ງຍນຣລຼຼວ' else 'h'
         return result
 
 
 wrapper = ModuleDeprecationWrapper(__name__)
 wrapper.add_deprecated_attr('transliterator', Transliterator, since='9.0.0')
+wrapper.add_deprecated_attr('NON_LATIN_DIGITS', NON_ASCII_DIGITS,
+                            replacement_name='NON_ASCII_DIGITS',
+                            since='10.3.0')

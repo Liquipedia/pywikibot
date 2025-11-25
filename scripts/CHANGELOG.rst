@@ -1,6 +1,34 @@
 Scripts Changelog
 =================
 
+10.7.0
+------
+
+* i18n updates
+
+misspelling
+^^^^^^^^^^^
+
+* ``-page`` option was added. (:phab:`T151540`)
+
+watchlist
+^^^^^^^^^
+
+* Several exceptions are caught during watchlist count.
+
+10.4.0
+------
+
+addwikis
+^^^^^^^^
+
+* Add help options for addwikis script whereas `help` is deprecated.
+
+interwiki
+^^^^^^^^^
+
+* Clarify ``-localonly`` option behavior and help text (:phab:`T57257`)
+
 10.3.0
 ------
 
@@ -9,13 +37,31 @@ Scripts Changelog
 archivebot
 ^^^^^^^^^^
 
-* Use wikidata items for archive header templates (:phab:`T396399`)
+* Use {{talkarchive}} template by default (:phab:`T400543`)
+* Use Wikidata items for archive header templates (:phab:`T396399`)
+
+create_isbn_edition
+^^^^^^^^^^^^^^^^^^^
+
+* This script will be removed from repository in Pywikibot 11
+
+interwiki
+^^^^^^^^^
+
+* Ignore :exc:`exceptions.SectionError` in :meth:`interwiki.Subject.page_empty_check` and treat it
+  as an empty page (:phab:`T398983`)
+* Show a warning if no username is configured for a site (:phab:`T135228`)
 
 redirect
 ^^^^^^^^
 
-* Try one more move to fix redirect targets (:phab:`T396473`)
-* Don't fix broken redirects if namespace of source and target are different (:phab:`T396456`)
+* Attempt an additional move to fix redirect targets (:phab:`T396473`)
+* Do not fix broken redirects if source and target namespaces differ (:phab:`T396456`)
+
+tracking_param_remover
+^^^^^^^^^^^^^^^^^^^^^^
+
+* Script for removing tracking URL parameters was added (:phab:`T399698`)
 
 
 10.2.0
@@ -1032,12 +1078,6 @@ login
 ^^^^^
 
 *  update help string
-
-maintenance
-^^^^^^^^^^^
-
-*  Add a preload_sites.py script to preload site information
-   (:phab:`T226157`)
 
 reflinks
 ^^^^^^^^

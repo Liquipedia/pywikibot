@@ -43,7 +43,7 @@ class TestSectionFunctions(TestCase):
         cls.content = file.read_text(encoding='utf-8')
 
     def setUp(self) -> None:
-        """Setup tests."""
+        """Set up tests."""
         self.catresult1 = '[[Category:Cat1]]\n[[Category:Cat2]]\n'
         super().setUp()
 
@@ -622,7 +622,7 @@ class TestTemplateParams(TestCase):
             self.assertIsNone(m['params'])
             self.assertIsNone(m[2])
             self.assertIsNotNone(m['unhandled_depth'])
-            self.assertTrue(m[0].endswith('foo {{bar}}'))
+            self.assertEndsWith(m[0], 'foo {{bar}}')
 
 
 class TestDisabledParts(DefaultDrySiteTestCase):
@@ -990,7 +990,7 @@ class TestDigitsConversion(TestCase):
     net = False
 
     def test_to_local(self) -> None:
-        """Test converting Latin digits to local digits."""
+        """Test converting ASCII digits to local digits."""
         self.assertEqual(textlib.to_local_digits(299792458, 'en'), '299792458')
         self.assertEqual(
             textlib.to_local_digits(299792458, 'fa'), '۲۹۹۷۹۲۴۵۸')
@@ -1001,20 +1001,20 @@ class TestDigitsConversion(TestCase):
             textlib.to_local_digits('299792458', 'km'), '២៩៩៧៩២៤៥៨')
 
     def test_to_latin(self) -> None:
-        """Test converting local digits to Latin digits."""
-        self.assertEqual(textlib.to_latin_digits('299792458'), '299792458')
+        """Test converting local digits to ASCII digits."""
+        self.assertEqual(textlib.to_ascii_digits('299792458'), '299792458')
         self.assertEqual(
-            textlib.to_latin_digits('۲۹۹۷۹۲۴۵۸', 'fa'), '299792458')
+            textlib.to_ascii_digits('۲۹۹۷۹۲۴۵۸', 'fa'), '299792458')
         self.assertEqual(
-            textlib.to_latin_digits('۲۹۹۷۹۲۴۵۸ flash'), '299792458 flash')
+            textlib.to_ascii_digits('۲۹۹۷۹۲۴۵۸ flash'), '299792458 flash')
         self.assertEqual(
-            textlib.to_latin_digits('២៩៩៧៩២៤៥៨', 'km'), '299792458')
+            textlib.to_ascii_digits('២៩៩៧៩២៤៥៨', 'km'), '299792458')
         self.assertEqual(
-            textlib.to_latin_digits('២៩៩៧៩២៤៥៨'), '299792458')
+            textlib.to_ascii_digits('២៩៩៧៩២៤៥៨'), '299792458')
         self.assertEqual(
-            textlib.to_latin_digits('២៩៩៧៩២៤៥៨', ['km', 'en']), '299792458')
+            textlib.to_ascii_digits('២៩៩៧៩២៤៥៨', ['km', 'en']), '299792458')
         self.assertEqual(
-            textlib.to_latin_digits('២៩៩៧៩២៤៥៨', ['en']), '២៩៩៧៩២៤៥៨')
+            textlib.to_ascii_digits('២៩៩៧៩២៤៥៨', ['en']), '២៩៩៧៩២៤៥៨')
 
 
 class TestReplaceExcept(DefaultDrySiteTestCase):
@@ -1309,11 +1309,12 @@ class TestReplaceExcept(DefaultDrySiteTestCase):
                 'x', 'y', ['file'], site=self.site),
             '[[NonFile:y]]')
 
+        # No File if filename is missing
         self.assertEqual(
             textlib.replaceExcept(
                 '[[File:]]',
                 'File:', 'NonFile:', ['file'], site=self.site),
-            '[[File:]]')
+            '[[NonFile:]]')
 
         self.assertEqual(
             textlib.replaceExcept(
@@ -1542,11 +1543,16 @@ class TestExtractSections(DefaultDrySiteTestCase):
         self.assertEqual(result.footer, footer)
         self.assertEqual(result.title, title)
         self.assertEqual(result, (header, sections, footer))
-        for section in result.sections:
+        for i, section in enumerate(result.sections):
             self.assertIsInstance(section, tuple)
             self.assertLength(section, 2)
             self.assertIsInstance(section.level, int)
             self.assertEqual(section.title.count('=') // 2, section.level)
+            self.assertIn(section.heading, result.sections)
+            count = result.sections.count(section.heading)
+            self.assertGreaterEqual(count, 1)
+            if count == 1:
+                self.assertEqual(result.sections.index(section.heading), i)
 
     def test_no_sections_no_footer(self) -> None:
         """Test for text having no sections or footer."""
@@ -1566,6 +1572,7 @@ class TestExtractSections(DefaultDrySiteTestCase):
                 '==title==\n'
                 'content')
         result = extract_sections(text, self.site)
+        self.assertEqual(result.sections.index('title'), 0)
         self._extract_sections_tests(
             result, 'text\n\n', [('==title==', '\ncontent')])
 
@@ -1601,6 +1608,11 @@ class TestExtractSections(DefaultDrySiteTestCase):
                 '==title 2==\n'
                 'content')
         result = extract_sections(text, self.site)
+        self.assertEqual(result.sections.index('title'), 0)
+        self.assertEqual(result.sections.index(('title', 4)), 0)
+        with self.assertRaisesRegex(ValueError,
+                                    r"\('title', 2\) not found in Section"):
+            result.sections.index(('title', 2))
         self._extract_sections_tests(
             result,
             'text\n\n',
@@ -1675,6 +1687,38 @@ class TestExtractSections(DefaultDrySiteTestCase):
             [],
             title='Pywikibot'
         )
+
+    def test_index(self) -> None:
+        """Test index behaviour of SectionList."""
+        text = """
+= Intro =
+== History ==
+== Usage ==
+=== Details ===
+= References =
+"""
+        result = extract_sections(text, self.site)
+        self._extract_sections_tests(result, '\n', [
+            ('= Intro =', '\n'),
+            ('== History ==', '\n'),
+            ('== Usage ==', '\n'),
+            ('=== Details ===', '\n'),
+            ('= References =', '\n'),
+        ])
+        sections = result.sections
+        self.assertIsInstance(sections, textlib.SectionList)
+        self.assertEqual(sections.index('Details'), 3)
+        self.assertEqual(sections.index('Details', 3), 3)
+        self.assertEqual(sections.index(sections[2]), 2)
+        self.assertEqual(sections.index('Intro', -10, 3), 0)
+        header = 'Details', 2
+        pattern = re.escape(f'{header!r} not found in Section headings/levels')
+        with self.assertRaisesRegex(ValueError, pattern):
+            sections.index(header)
+        header = 'Unknown'
+        with self.assertRaisesRegex(
+                ValueError, f'{header!r} not found in Section heading'):
+            sections.index(header)
 
 
 if __name__ == '__main__':

@@ -169,18 +169,10 @@ ignorelist = [
     # Ignore links containing * in domain name
     # as they are intentionally fake
     re.compile(r'https?\:\/\/\*(/.*)?'),
+
+    # properly formatted mailto links: no further checking possible
+    re.compile(r'mailto:[^@]+@[a-z0-9\.]+(\?.*)?'),
 ]
-
-
-def get_archive_url(url):
-    """Get archive URL."""
-    try:
-        return get_closest_memento_url(
-            url, timegate_uri='http://web.archive.org/web/')
-    except Exception:
-        return get_closest_memento_url(
-            url,
-            timegate_uri='http://timetravel.mementoweb.org/webcite/timegate/')
 
 
 def weblinks_from_text(
@@ -251,7 +243,8 @@ class LinkCheckThread(threading.Thread):
     hosts: dict[str, float] = {}
     lock = threading.Lock()
 
-    def __init__(self, page, url, history, http_ignores, day) -> None:
+    def __init__(self, page, url: str, history: History,
+                 http_ignores: list[int], day: int) -> None:
         """Initializer."""
         self.page = page
         self.url = url
@@ -341,7 +334,8 @@ class History:
      }
     """
 
-    def __init__(self, report_thread, site=None) -> None:
+    def __init__(self, report_thread: DeadLinkReportThread | None,
+                 site: pywikibot._BaseSite | None = None) -> None:
         """Initializer."""
         self.report_thread = report_thread
         if not site:
@@ -405,7 +399,7 @@ class History:
                 if time_since_first_found > 60 * 60 * 24 * weblink_dead_days:
                     # search for archived page
                     try:
-                        archive_url = get_archive_url(url)
+                        archive_url = get_closest_memento_url(url)
                     except Exception as e:
                         pywikibot.warning(
                             f'get_closest_memento_url({url}) failed: {e}')
@@ -539,7 +533,8 @@ class WeblinkCheckerRobot(SingleSiteBot, ExistingPageBot):
 
     use_redirects = False
 
-    def __init__(self, http_ignores=None, day: int = 7, **kwargs) -> None:
+    def __init__(self, http_ignores: list[int] | None = None,
+                 day: int = 7, **kwargs) -> None:
         """Initializer."""
         super().__init__(**kwargs)
 
@@ -571,8 +566,9 @@ class WeblinkCheckerRobot(SingleSiteBot, ExistingPageBot):
                 # thread dies when program terminates
                 thread.daemon = True
                 # use hostname as thread.name
-                thread.name = removeprefix(
-                    urlparse.urlparse(url).hostname, 'www.')
+                hostname = urlparse.urlparse(url).hostname
+                if hostname is not None:
+                    thread.name = removeprefix(hostname, 'www.')
                 self.threads.append(thread)
 
     def teardown(self) -> None:

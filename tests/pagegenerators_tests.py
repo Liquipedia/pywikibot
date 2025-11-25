@@ -27,7 +27,7 @@ from pywikibot.pagegenerators import (
     PreloadingGenerator,
     WikibaseItemFilterPageGenerator,
 )
-from tests import join_data_path, unittest_print
+from tests import join_data_path
 from tests.aspects import (
     DefaultSiteTestCase,
     DeprecationTestCase,
@@ -73,13 +73,13 @@ class TestDryPageGenerators(TestCase):
     titles = en_wp_page_titles + en_wp_nopage_titles
 
     def setUp(self) -> None:
-        """Setup test."""
+        """Set up test."""
         super().setUp()
         self.site = self.get_site()
 
     def assertFunction(self, obj) -> None:
         """Assert function test."""
-        self.assertTrue(hasattr(pagegenerators, obj))
+        self.assertHasAttr(pagegenerators, obj)
         self.assertTrue(callable(getattr(pagegenerators, obj)))
 
     def test_module_import(self) -> None:
@@ -202,7 +202,7 @@ class BasetitleTestCase(TestCase):
                   'Calf Case.pdf/{}')
 
     def setUp(self) -> None:
-        """Setup tests."""
+        """Set up tests."""
         super().setUp()
         self.site = self.get_site()
         self.titles = [self.base_title.format(i) for i in range(1, 11)]
@@ -228,7 +228,7 @@ class TestCategoryFilterPageGenerator(BasetitleTestCase):
     category_list = ['Category:Validated']
 
     def setUp(self) -> None:
-        """Setup tests."""
+        """Set up tests."""
         super().setUp()
         self.catfilter_list = [pywikibot.Category(self.site, cat)
                                for cat in self.category_list]
@@ -596,7 +596,7 @@ class TestPreloadingGenerator(DefaultSiteTestCase):
             self.assertIsInstance(page.exists(), bool)
             self.assertLength(page._revisions, 1)
             self.assertIsNotNone(page._revisions[page._revid].text)
-            self.assertFalse(hasattr(page, '_pageprops'))
+            self.assertNotHasAttr(page, '_pageprops')
         self.assertLength(links, count)
 
     def test_low_step(self) -> None:
@@ -611,7 +611,7 @@ class TestPreloadingGenerator(DefaultSiteTestCase):
             self.assertIsInstance(page.exists(), bool)
             self.assertLength(page._revisions, 1)
             self.assertIsNotNone(page._revisions[page._revid].text)
-            self.assertFalse(hasattr(page, '_pageprops'))
+            self.assertNotHasAttr(page, '_pageprops')
         self.assertLength(links, count)
 
     def test_order(self) -> None:
@@ -625,7 +625,7 @@ class TestPreloadingGenerator(DefaultSiteTestCase):
             self.assertIsInstance(page.exists(), bool)
             self.assertLength(page._revisions, 1)
             self.assertIsNotNone(page._revisions[page._revid].text)
-            self.assertFalse(hasattr(page, '_pageprops'))
+            self.assertNotHasAttr(page, '_pageprops')
             self.assertEqual(page, links[count])
         self.assertLength(links, count + 1)
 
@@ -1077,7 +1077,7 @@ class TestFactoryGenerator(DefaultSiteTestCase):
         self.assertLessEqual(len(pages), 10)
         for page in pages:
             self.assertIsInstance(page, pywikibot.Page)
-            self.assertTrue(page.title().lower().startswith('a'))
+            self.assertStartsWith(page.title().lower(), 'a')
 
     def test_prefixing_ns(self) -> None:
         """Test prefixindex generator with namespace filter."""
@@ -1427,7 +1427,7 @@ class TestWantedFactoryGenerator(DefaultSiteTestCase):
     """Test pagegenerators.GeneratorFactory for wanted pages."""
 
     def setUp(self) -> None:
-        """Setup tests."""
+        """Set up tests."""
         super().setUp()
         self.gf = pagegenerators.GeneratorFactory(site=self.site)
 
@@ -1453,7 +1453,7 @@ class TestWantedFactoryGenerator(DefaultSiteTestCase):
         for page in self._generator_with_tests():
             self.assertIsInstance(page, pywikibot.Page)
             if not isinstance(page, pywikibot.FilePage):
-                with self.assertRaisesRegex(ValueError,
+                with self.assertRaisesRegex(ValueError,  # pragma: no cover
                                             'does not have a valid extension'):
                     pywikibot.FilePage(page)
             else:
@@ -1547,7 +1547,7 @@ class TestLogeventsFactoryGenerator(DefaultSiteTestCase,
 
     @classmethod
     def setUpClass(cls) -> None:
-        """Setup test class."""
+        """Set up test class."""
         super().setUpClass()
         site = pywikibot.Site()
         newuser_logevents = list(site.logevents(logtype='newusers', total=1))
@@ -1666,7 +1666,7 @@ class EventStreamsPageGeneratorTestCase(RecentChangesTestCase):
 
         testentry = entries[0]
         self.assertEqual(testentry.site, site)
-        self.assertTrue(hasattr(testentry, '_rcinfo'))
+        self.assertHasAttr(testentry, '_rcinfo')
 
         rcinfo = testentry._rcinfo
         self.assertEqual(rcinfo['server_name'], site.hostname())
@@ -1687,26 +1687,16 @@ class TestUnconnectedPageGenerator(DefaultSiteTestCase):
         if not site:
             self.skipTest('Site is not using a Wikibase repository')
 
-        pages = list(pagegenerators.UnconnectedPageGenerator(self.site, 3))
+        pages = list(
+            pagegenerators.UnconnectedPageGenerator(self.site, 3, strict=True))
         self.assertLessEqual(len(pages), 3)
 
         pattern = (fr'Page \[\[({site.sitename}:|{site.code}:)-1\]\]'
                    r" doesn't exist\.")
-        found = []
         for page in pages:
-            with self.subTest(page=page):
-                try:
-                    page.data_item()
-                except NoPageError as e:
-                    self.assertRegex(str(e), pattern)
-                else:
-                    found.append(page)
-        if found:
-            unittest_print('connection found for ',
-                           ', '.join(str(p) for p in found))
-
-        # assume that we have at least one unconnected page
-        self.assertLess(len(found), 3)
+            with self.subTest(page=page), self.assertRaisesRegex(NoPageError,
+                                                                 pattern):
+                page.data_item()
 
     def test_unconnected_without_repo(self) -> None:
         """Test that it raises a ValueError on sites without repository."""

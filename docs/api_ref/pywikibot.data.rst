@@ -11,11 +11,19 @@
 .. automodule:: data.api
    :synopsis: Module providing several layers of data access to the wiki
 
+:mod:`data.citoid` --- Citoid Requests
+======================================
+
+.. automodule:: data.citoid
+   :synopsis: Citoid Query interface
+
 :mod:`data.memento` --- Memento Requests
 ========================================
 
 .. automodule:: data.memento
    :synopsis: Fix ups for memento-client package version 0.6.1
+
+.. autodata:: data.memento.DEFAULT_TIMEGATE_BASE_URI
 
 :mod:`data.mysql` --- Mysql Requests
 ====================================

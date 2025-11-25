@@ -59,7 +59,7 @@ from __future__ import annotations
 import re
 from contextlib import suppress
 from enum import IntEnum
-from typing import Any
+from typing import Any, cast
 from urllib.parse import urlparse, urlunparse
 
 import pywikibot
@@ -68,7 +68,7 @@ from pywikibot.backports import Callable, Match, Pattern
 from pywikibot.site import Namespace
 from pywikibot.tools import first_lower, first_upper
 from pywikibot.tools.chars import url2string
-from pywikibot.userinterfaces.transliteration import NON_LATIN_DIGITS
+from pywikibot.userinterfaces.transliteration import NON_ASCII_DIGITS
 
 
 try:
@@ -369,10 +369,8 @@ class CosmeticChangesToolkit:
         if not self.talkpage:
             subpage = False
             if self.template:
-                loc = None
-                with suppress(TypeError):
-                    _tmpl, loc = i18n.translate(self.site.code, moved_links)
-                if loc is not None and loc in self.title:
+                loc = i18n.translate(self.site.code, moved_links)
+                if loc is not None and loc[1] in self.title:
                     subpage = True
 
             # get interwiki
@@ -504,25 +502,34 @@ class CosmeticChangesToolkit:
                 cache[False] = True  # signal there is nothing to replace
 
         def replace_magicword(match: Match[str]) -> str:
+            """Replace magic words in file link params, leaving captions."""
+            linktext = match.group()
             if cache.get(False):
-                return match.group()
-            split = match.group().split('|')
-            if len(split) == 1:
-                return match.group()
+                return linktext
+
+            params = match.group(2)  # includes pre-leading |
+            if not params:
+                return linktext
 
             if not cache:
                 init_cache()
 
-            # push ']]' out and re-add below
-            split[-1] = split[-1][:-2]
-            return '{}|{}]]'.format(
-                split[0], '|'.join(cache.get(x.strip(), x) for x in split[1:]))
+            # do the magic job
+            marker = textlib.findmarker(params)
+            params = textlib.replaceExcept(
+                params, r'\|', marker, ['link', 'template'])
+            parts = params.split(marker)
+            replaced = '|'.join(cache.get(p.strip(), p) for p in parts)
+
+            # extract namespace
+            m = cast(Match[str],
+                     re.match(r'\[\[\s*(?P<namespace>[^:]+)\s*:', linktext))
+
+            return f'[[{m["namespace"]}:{match["filename"]}{replaced}]]'
 
         cache: dict[bool | str, Any] = {}
         exceptions = ['comment', 'nowiki', 'pre', 'syntaxhighlight']
-        regex = re.compile(
-            textlib.FILE_LINK_REGEX % '|'.join(self.site.namespaces[6]),
-            flags=re.VERBOSE)
+        regex = textlib.get_regexes('file', self.site)[0]
         return textlib.replaceExcept(
             text, regex, replace_magicword, exceptions)
 
@@ -735,7 +742,7 @@ class CosmeticChangesToolkit:
             return text
 
         # iterate stripped sections and create a new page body
-        new_body: list[textlib.Section] = []
+        new_body: textlib.SectionList = textlib.SectionList()
         for i, strip_section in enumerate(strip_sections):
             current_dep = sections[i].level
             try:
@@ -1031,10 +1038,10 @@ class CosmeticChangesToolkit:
             'syntaxhighlight',
         ]
 
-        digits = NON_LATIN_DIGITS['fa']
+        digits = NON_ASCII_DIGITS['fa']
         faChrs = 'ءاآأإئؤبپتثجچحخدذرزژسشصضطظعغفقکگلمنوهیةيك' + digits
 
-        # not to let bot edits in latin content
+        # not to let bot edits in ascii numerals content
         exceptions.append(re.compile(f'[^{faChrs}] *?"*? *?, *?[^{faChrs}]'))
         text = textlib.replaceExcept(text, ',', '،', exceptions,
                                      site=self.site)

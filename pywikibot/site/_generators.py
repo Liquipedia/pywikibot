@@ -26,7 +26,12 @@ from pywikibot.exceptions import (
 )
 from pywikibot.site._decorators import need_right
 from pywikibot.site._namespace import NamespaceArgType
-from pywikibot.tools import deprecate_arg, is_ip_address
+from pywikibot.tools import (
+    deprecate_arg,
+    deprecated,
+    deprecated_signature,
+    is_ip_address,
+)
 from pywikibot.tools.itertools import filter_unique
 
 
@@ -89,7 +94,7 @@ class GeneratorsMixin:
             # Store the order of the input data.
             priority_dict = dict(zip(batch, range(len(batch))))
 
-            prio_queue = []
+            prio_queue: list[tuple[int, pywikibot.Page]] = []
             next_prio = 0
             params = {'pageids': batch}
             rvgen = api.PropertyGenerator('info', site=self, parameters=params)
@@ -172,7 +177,7 @@ class GeneratorsMixin:
             # Do not use p.pageid property as it will force page loading.
             pageids = [str(p._pageid) for p in batch
                        if hasattr(p, '_pageid') and p._pageid > 0]
-            cache = {}
+            cache: dict[str, tuple[int, pywikibot.Page]] = {}
             # In case of duplicates, return the first entry.
             for priority, page in enumerate(batch):
                 try:
@@ -181,7 +186,7 @@ class GeneratorsMixin:
                 except InvalidTitleError:
                     pywikibot.exception()
 
-            prio_queue = []
+            prio_queue: list[tuple[int, pywikibot.Page]] = []
             next_prio = 0
             rvgen = api.PropertyGenerator(props, site=self)
             rvgen.set_maximum_items(-1)  # suppress use of "rvlimit" parameter
@@ -925,9 +930,10 @@ class GeneratorsMixin:
             for linkdata in pageitem['extlinks']:
                 yield linkdata['*']
 
+    @deprecated_signature(since='10.4.0')
     def allpages(
         self,
-        start: str = '!',
+        start: str = '!', *,
         prefix: str = '',
         namespace: SingleNamespaceType = 0,
         filterredir: bool | None = None,
@@ -969,6 +975,11 @@ class GeneratorsMixin:
             type such as bool, or an iterable with more than one
             namespace or *filterredir* parameter has an invalid type.
         """
+        def _maxsize_filter(item):
+            """Return True if page text length is within maxsize limit."""
+            return len(item.text.encode(self.encoding())) <= maxsize
+
+        misermode = self.siteinfo.get('misermode') and maxsize is not None
         if filterredir not in (True, False, None):
             raise TypeError('filterredir parameter must be True, False or '
                             f'None, not {type(filterredir)}')
@@ -976,7 +987,7 @@ class GeneratorsMixin:
         apgen = self._generator(api.PageGenerator, type_arg='allpages',
                                 namespaces=namespace,
                                 gapfrom=start, total=total,
-                                g_content=content)
+                                g_content=content or misermode)
         if prefix:
             apgen.request['gapprefix'] = prefix
         if filterredir is not None:
@@ -988,7 +999,7 @@ class GeneratorsMixin:
                                                    'withoutlanglinks')
         if isinstance(minsize, int):
             apgen.request['gapminsize'] = str(minsize)
-        if isinstance(maxsize, int):
+        if not misermode and isinstance(maxsize, int):
             apgen.request['gapmaxsize'] = str(maxsize)
         if isinstance(protect_type, str):
             apgen.request['gapprtype'] = protect_type
@@ -996,8 +1007,12 @@ class GeneratorsMixin:
                 apgen.request['gapprlevel'] = protect_level
         if reverse:
             apgen.request['gapdir'] = 'descending'
+        if misermode:
+            apgen.filter_func = _maxsize_filter
+
         return apgen
 
+    @deprecated(since='10.7.0')
     def alllinks(
         self,
         start: str = '',
@@ -1035,6 +1050,10 @@ class GeneratorsMixin:
            The minimum read timeout value should be 60 seconds in that
            case.
 
+        .. deprecated:: 10.7
+           This method is dysfunctional and should no longer be used. It
+           will probably be removed in Pywikibot 11.
+
         .. seealso::
            - :api:`Alllinks`
            - :meth:`pagebacklinks`
@@ -1053,6 +1072,7 @@ class GeneratorsMixin:
             inappropriate type such as bool, or an iterable with more
             than one namespace
         """
+        # no cover: start
         if unique and fromids:
             raise Error('alllinks: unique and fromids cannot both be True.')
         algen = self._generator(api.ListGenerator, type_arg='alllinks',
@@ -1084,6 +1104,7 @@ class GeneratorsMixin:
             if fromids:
                 p._fromid = link['fromid']  # type: ignore[attr-defined]
             yield p
+        # no cover: stop
 
     def allcategories(
         self,
@@ -2337,7 +2358,7 @@ class GeneratorsMixin:
         """
         return self.querypage('Listredirects', total)
 
-    @deprecate_arg('type', 'protect_type')
+    @deprecate_arg('type', 'protect_type')  # since 9.0
     def protectedpages(
         self,
         namespace: NamespaceArgType = 0,
@@ -2359,13 +2380,13 @@ class GeneratorsMixin:
         :param namespace: The searched namespace.
         :param protect_type: The protection type to search for
             (default 'edit').
-        :param level: The protection level (like 'autoconfirmed'). If False it
-            shows all protection levels.
+        :param level: The protection level (like 'autoconfirmed'). If
+            False it shows all protection levels.
         :return: The pages which are protected.
         """
         namespaces = self.namespaces.resolve(namespace)
         # always assert, so we are be sure that protect_type could be 'create'
-        assert 'create' in self.protection_types(), \
+        assert 'create' in self.restrictions['types'], \
             "'create' should be a valid protection type."
         if protect_type == 'create':
             return self._generator(

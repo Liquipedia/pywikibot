@@ -153,9 +153,8 @@ class LoginManager:
 
         if user['name'] != main_username:
             # Report the same error as server error code NotExists
-            raise NoUsernameError(
-                f"Username '{main_username}' does not exist on {self.site}"
-            )
+            msg = f"Username '{main_username}' does not exist on {self.site}"
+            raise NoUsernameError(msg)
 
     def botAllowed(self) -> bool:
         """Check whether the bot is listed on a specific page.
@@ -322,7 +321,7 @@ class LoginManager:
 
             if error_code in ('NotExists', 'Illegal', 'readapidenied',
                               'Failed', 'Aborted', 'FAIL'):
-                error_msg = f'{e.code}: {e.info}'
+                error_msg = f'{e.code} on {self.site}: {e.info}'
                 raise NoUsernameError(error_msg)
 
             pywikibot.error(f'Login failed ({error_code}).')
@@ -454,14 +453,16 @@ class ClientLoginManager(LoginManager):
             if status in ('NeedToken', 'WrongToken', 'badtoken'):
                 # if incorrect login token was used,
                 # force relogin and generate fresh one
-                pywikibot.error('Received incorrect login token. '
-                                'Forcing re-login.')
+                pywikibot.error(f'{status}: Received incorrect login token.'
+                                ' Forcing re-login.')
                 # invalidate superior wiki cookies (T224712)
                 pywikibot.data.api._invalidate_superior_cookies(
                     self.site.family)
-                self.site.tokens.clear()
-                login_request[
-                    self.keyword('token')] = self.site.tokens['login']
+                token = response.get('token')
+                if not token:
+                    self.site.tokens.clear()
+                    token = self.site.tokens['login']
+                login_request[self.keyword('token')] = token
                 continue
 
             if status == 'UI':  # pragma: no cover

@@ -9,9 +9,11 @@ from __future__ import annotations
 import inspect
 import os
 import sys
+import tempfile
 import unittest
 import warnings
 from contextlib import contextmanager, suppress
+from pathlib import Path
 from subprocess import PIPE, Popen, TimeoutExpired
 from typing import Any, NoReturn
 
@@ -23,6 +25,7 @@ from pywikibot.data.api import Request as _original_Request
 from pywikibot.exceptions import APIError
 from pywikibot.login import LoginStatus
 from pywikibot.site import Namespace
+from pywikibot.tools import PYTHON_VERSION
 from pywikibot.tools.collections import EMPTY_DEFAULT
 from tests import _pwb_py
 
@@ -259,16 +262,21 @@ class DummySiteinfo:
         self._cache[key] = (value, False)
 
     def get(self, key, get_default=True, cache=True, expiry=False):
-        """Return dry data."""
+        """Return dry cached data or default value."""
         # Default values are always expired, so only expiry=False doesn't force
         # a reload
         force = expiry is not False
-        if not force and key in self._cache:
-            loaded = self._cache[key]
-            if not loaded[1] and not get_default:
+        if not force and (key in self._cache or 'general' in self._cache):
+            try:
+                value, is_default = self._cache[key]
+            except KeyError:
+                value, is_default = self._cache['general']
+                value = value[key]
+
+            if not is_default and not get_default:
                 raise KeyError(key)
 
-            return loaded[0]
+            return value
 
         if get_default:
             default = EMPTY_DEFAULT
@@ -341,7 +349,7 @@ class DrySite(pywikibot.site.APISite):
         self._siteinfo._cache['case'] = (
             'case-sensitive' if self.family.name == 'wiktionary' else
             'first-letter', True)
-        self._siteinfo._cache['mainpage'] = 'Main Page'
+        self._siteinfo._cache['mainpage'] = ('Main Page', True)
         extensions = []
         if self.family.name == 'wikisource':
             extensions.append({'name': 'ProofreadPage'})
@@ -387,7 +395,7 @@ class DrySite(pywikibot.site.APISite):
 
     def data_repository(self):
         """Return Site object for data repository e.g. Wikidata."""
-        if self.hostname().endswith('.beta.wmflabs.org'):
+        if self.hostname().endswith('.beta.wmcloud.org'):
             # TODO: Use definition for beta cluster's wikidata
             code, fam = None, None
             fam_name = self.hostname().split('.')[-4]
@@ -467,6 +475,10 @@ def execute(command: list[str], *, data_in=None, timeout=None):
 
     :param command: executable to run and arguments to use
     """
+    if PYTHON_VERSION < (3, 9):
+        command.insert(1, '-W ignore::FutureWarning:pwb:46')
+        command.insert(1, '-W ignore::FutureWarning:__main__:46')
+
     env = os.environ.copy()
 
     # Prevent output by test package; e.g. 'max_retries reduced from x to y'
@@ -515,22 +527,52 @@ def execute_pwb(args: list[str], *,
        the *error* parameter was removed.
     .. versionchanged:: 9.1
        parameters except *args* are keyword only.
+    .. versionchanged:: 10.4
+       coverage is used if running github actions and a temporary file
+       is used for overrides.
 
     :param args: list of arguments for pwb.py
     :param overrides: mapping of pywikibot symbols to test replacements
     """
+    tmp_path: Path | None = None
     command = [sys.executable]
+    use_coverage = os.environ.get('GITHUB_ACTIONS')
+
+    if use_coverage:
+        # Test running and coverage is installed,
+        # enable coverage with subprocess
+        with suppress(ModuleNotFoundError):
+            import coverage  # noqa: F401
+            command.extend(['-m', 'coverage', 'run', '--parallel-mode'])
 
     if overrides:
-        command.append('-c')
-        overrides = '; '.join(
-            f'{key} = {value}' for key, value in overrides.items())
-        command.append(
-            f'import pwb; import pywikibot; {overrides}; pwb.main()')
+        override_code = 'import pwb, pywikibot\n'
+        override_code += '\n'.join(f'{k} = {v}' for k, v in overrides.items())
+        override_code += '\npwb.main()'
+
+        if use_coverage:
+            # Write overrides in temporary file
+            with tempfile.NamedTemporaryFile(
+                    'w', suffix='.py', delete=False) as f:
+                f.write(override_code)
+                tmp_path = Path(f.name)
+                command.append(f.name)
+        else:
+            command.extend(['-c', override_code])
+
     else:
         command.append(_pwb_py)
 
-    return execute(command=command + args, data_in=data_in, timeout=timeout)
+    try:
+        # Run subprocess
+        result = execute(
+            command=command + args, data_in=data_in, timeout=timeout)
+    finally:
+        # delete temporary file if created
+        if tmp_path and tmp_path.exists():
+            tmp_path.unlink()
+
+    return result
 
 
 @contextmanager

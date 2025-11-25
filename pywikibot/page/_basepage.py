@@ -12,7 +12,7 @@ from collections import Counter
 from contextlib import suppress
 from itertools import islice
 from textwrap import shorten, wrap
-from typing import TYPE_CHECKING, Any, NoReturn
+from typing import TYPE_CHECKING
 from urllib.parse import quote_from_bytes
 from warnings import warn
 
@@ -38,15 +38,15 @@ from pywikibot.site import Namespace, NamespaceArgType
 from pywikibot.tools import (
     ComparableMixin,
     cached,
-    deprecate_positionals,
     deprecated,
     deprecated_args,
+    deprecated_signature,
     first_upper,
 )
 
 
 if TYPE_CHECKING:
-    from typing_extensions import Literal
+    from typing import Any, Literal, NoReturn
 
     from pywikibot.page import Revision
 
@@ -391,8 +391,7 @@ class BasePage(ComparableMixin):
         page_section = self.section()
         if page_section:
             content = textlib.extract_sections(text, self.site)
-            headings = {section.heading for section in content.sections}
-            if page_section not in headings:
+            if page_section not in content.sections:
                 raise SectionError(f'{page_section!r} is not a valid section '
                                    f'of {self.title(with_section=False)}')
 
@@ -1458,13 +1457,40 @@ class BasePage(ComparableMixin):
                   force=force, asynchronous=asynchronous, callback=callback,
                   **kwargs)
 
-    def watch(self, unwatch: bool = False) -> bool:
-        """Add or remove this page to/from bot account's watchlist.
+    @deprecated_signature(since='10.4.0')
+    def watch(
+        self, *,
+        unwatch: bool = False,
+        expiry: Timestamp | str | Literal[
+            'infinite', 'indefinite', 'infinity', 'never'] | None = None
+    ) -> bool:
+        """Add or remove this page from the bot account's watchlist.
 
-        :param unwatch: True to unwatch, False (default) to watch.
+        .. versionchanged:: 10.4.0
+           Added the *expiry* parameter to specify watch expiry time.
+           Positional parameters are deprecated; all parameters must be
+           passed as keyword arguments.
+
+        .. seealso::
+           - :meth:`Site.watch()<pywikibot.site._apisite.APISite.watch>`
+           - :meth:`Site.watched_pages()
+             <pywikibot.site._generators.GeneratorsMixin.watched_pages>`
+           - :api:`Watch`
+
+        :param unwatch: If True, the page will be from the watchlist.
+        :param expiry: Expiry timestamp to apply to the watch. Passing
+            None or omitting this parameter leaves any existing expiry
+            unchanged. Expiry values may be relative (e.g. ``5 months``
+            or ``2 weeks``) or absolute (e.g. ``2014-09-18T12:34:56Z``).
+            For no expiry, use ``infinite``, ``indefinite``, ``infinity``
+            or `never`. For absolute timestamps the :class:`Timestamp`
+            class can be used.
         :return: True if successful, False otherwise.
+        :raises APIError: badexpiry: Invalid value for expiry parameter
+        :raises KeyError: 'watch' isn't in API response
+        :raises TypeError: unexpected keyword argument
         """
-        return self.site.watch(self, unwatch)
+        return self.site.watch(self, unwatch=unwatch, expiry=expiry)
 
     def clear_cache(self) -> None:
         """Clear the cached attributes of the page."""
@@ -1634,7 +1660,7 @@ class BasePage(ComparableMixin):
         """Convenience function to get the Wikibase item of a page."""
         return pywikibot.ItemPage.fromPage(self)
 
-    @deprecate_positionals(since='9.2')
+    @deprecated_signature(since='9.2')
     def templates(self,
                   *,
                   content: bool = False,
@@ -1679,7 +1705,7 @@ class BasePage(ComparableMixin):
 
         return list(self._templates)
 
-    @deprecate_positionals(since='9.2')
+    @deprecated_signature(since='9.2')
     def itertemplates(
         self,
         total: int | None = None,
@@ -1977,6 +2003,50 @@ class BasePage(ComparableMixin):
                                   movetalk=movetalk,
                                   noredirect=noredirect,
                                   movesubpages=movesubpages)
+
+    def rollback(self, **kwargs: Any) -> dict[str, int | str]:
+        """Roll back this page to the version before the last edit by a user.
+
+        .. versionadded:: 10.5
+
+        .. seealso::
+           :meth:`Site.rollbackpage()
+           <pywikibot.site._apisite.APISite.rollbackpage>`
+
+        :keyword tags: Tags to apply to the rollback.
+        :kwtype tags: str | Sequence[str] | None
+        :keyword str user: The last user to be rolled back; Default is
+            :attr:`BasePage.latest_revision.user
+            <page.BasePage.latest_revision>`.
+        :keyword str | None summary: Custom edit summary for the rollback
+        :keyword bool | None markbot: Mark the reverted edits and the
+            revert as bot edits. If not given, it is set to True if the
+            rollback user belongs to the 'bot' group, otherwise False.
+        :keyword watchlist: Unconditionally add or remove the page from
+            the current user's watchlist; 'preferences' is ignored for
+            bot users.
+        :kwtype watchlist: Literal['watch', 'unwatch', 'preferences',
+            'nochange'] | None
+        :keyword watchlistexpiry: Watchlist expiry timestamp. Omit this
+            parameter entirely to leave the current expiry unchanged.
+        :kwtype watchlistexpiry: pywikibot.Timestamp | str | Literal[
+            'infinite', 'indefinite', 'infinity', 'never'] | None
+        :returns: Dictionary containing rollback result like
+
+            .. code:: python
+
+               {
+                   'title': <page title>,
+                   'pageid': <page ID>,
+                   'summary': <rollback summary>,
+                   'revid': <ID of the new revision created by the rollback>,
+                   'old_revid': <ID of the newest revision being rolled back>,
+                   'last_revid': <ID of the revision restored by the rollback>,
+               }
+
+        raises exceptions.Error: The rollback fails.
+        """
+        return self.site.rollbackpage(self, **kwargs)
 
     def delete(
         self,

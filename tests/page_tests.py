@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import pickle
 import re
+import time
 from contextlib import suppress
 from datetime import timedelta
 from unittest import mock
@@ -272,7 +273,11 @@ class TestPageObjectEnglish(TestCase):
             'File:Example #3.jpg',  # file extension in section
         ):
             with self.subTest(title=title), \
-                    self.assertRaises(ValueError):
+                    self.assertRaisesRegex(
+                        ValueError,
+                        r'(not.*valid.*file'
+                        r'|not in the file namespace'
+                        r'|does not have a valid extension)'):
                 pywikibot.FilePage(site, title)
 
     def testImageAndDataRepository(self) -> None:
@@ -570,14 +575,14 @@ class TestPageObject(DefaultSiteTestCase):
         else:
             self.skipTest(f'No redirect pages on site {site!r}')
         # This page is already initialised
-        self.assertTrue(hasattr(page, '_isredir'))
+        self.assertHasAttr(page, '_isredir')
         # call api.update_page without prop=info
         del page._isredir
         page.isDisambig()
         self.assertTrue(page.isRedirectPage())
 
         page_copy = pywikibot.Page(site, page.title())
-        self.assertFalse(hasattr(page_copy, '_isredir'))
+        self.assertNotHasAttr(page_copy, '_isredir')
         page_copy.isDisambig()
         self.assertTrue(page_copy.isRedirectPage())
 
@@ -727,7 +732,7 @@ class TestPageBotMayEdit(TestCase):
     login = True
 
     def setUp(self) -> None:
-        """Setup test."""
+        """Set up test."""
         super().setUp()
         self.page = pywikibot.Page(self.site,
                                    'not_existent_page_for_pywikibot_tests')
@@ -1009,6 +1014,7 @@ class TestPageRedirects(TestCase):
     def testPageGet(self) -> None:
         """Test ``Page.get()`` on different types of pages."""
         fail_msg = '{page!r}.get() raised {error!r} unexpectedly!'
+        unexpected_exceptions = IsRedirectPageError, NoPageError, SectionError
         site = self.get_site('en')
         p1 = pywikibot.Page(site, 'User:Legoktm/R2')
         p2 = pywikibot.Page(site, 'User:Legoktm/R1')
@@ -1024,7 +1030,7 @@ class TestPageRedirects(TestCase):
 
         try:
             p2.get(get_redirect=True)
-        except (IsRedirectPageError, NoPageError, SectionError) as e:
+        except unexpected_exceptions as e:  # pragma: no cover
             self.fail(fail_msg.format(page=p2, error=e))
 
         with self.assertRaisesRegex(NoPageError, NO_PAGE_RE):
@@ -1039,7 +1045,7 @@ class TestPageRedirects(TestCase):
         page = pywikibot.Page(site, 'Manual:Pywikibot/2.0 #See_also')
         try:
             page.get()
-        except (IsRedirectPageError, NoPageError, SectionError) as e:
+        except unexpected_exceptions as e:  # pragma: no cover
             self.fail(fail_msg.format(page=page, error=e))
 
     def test_set_redirect_target(self) -> None:
@@ -1082,13 +1088,26 @@ class TestPageUserAction(DefaultSiteTestCase):
 
         # Note: this test uses the userpage, so that it is unwatched and
         # therefore is not listed by script_tests test_watchlist_simulate.
+
         userpage = self.get_userpage()
+        # watched_pages parameters
+        wp_params = {'force': True, 'with_talkpage': False}
         rv = userpage.watch()
-        self.assertIsInstance(rv, bool)
+
+        self.assertEqual(userpage.exists(), rv)
+        if rv:
+            self.assertIn(userpage, userpage.site.watched_pages(**wp_params))
+
+        with self.assertWarnsRegex(UserWarning,
+                                   r"expiry parameter \('.+'\) is ignored"):
+            rv = userpage.watch(unwatch=True, expiry='indefinite')
+
         self.assertTrue(rv)
-        rv = userpage.watch(unwatch=True)
-        self.assertIsInstance(rv, bool)
+        rv = userpage.watch(expiry='5 seconds')
         self.assertTrue(rv)
+        self.assertIn(userpage, userpage.site.watched_pages(**wp_params))
+        time.sleep(10)
+        self.assertNotIn(userpage, userpage.site.watched_pages(**wp_params))
 
 
 class TestPageDelete(TestCase):

@@ -72,10 +72,11 @@ class TestLink(DefaultDrySiteTestCase):
         for items in iterable:
             if isinstance(items, str):
                 items = [items]
-            items = [re.sub(' ',
-                            self.site.family.title_delimiter_and_aliases[0],
-                            item)
-                     for item in items]
+            items = [
+                item.replace(' ',
+                             self.site.family.title_delimiter_and_aliases[0])
+                for item in items
+            ]
             if len(items) == 1:
                 items = items[0]
             yield items
@@ -122,25 +123,25 @@ class TestLink(DefaultDrySiteTestCase):
     def test_invalid(self) -> None:
         """Test that invalid titles raise InvalidTitleError."""
         # Bad characters forbidden regardless of wgLegalTitleChars
-        def generate_contains_illegal_chars_exc_regex(text):
+        def generate_contains_illegal_chars_exc_regex(text) -> str:
             return (rf'^(u|)\'{re.escape(text)}\' contains illegal char'
                     rf'\(s\) (u|)\'{re.escape(text[2])}\'$')
 
         # Directory navigation
-        def generate_contains_dot_combinations_exc_regex(text):
+        def generate_contains_dot_combinations_exc_regex(text) -> str:
             return (rf'^\(contains \. / combinations\): (u|)'
                     rf'\'{re.escape(text)}\'$')
 
         # Tilde
-        def generate_contains_tilde_exc_regex(text):
+        def generate_contains_tilde_exc_regex(text) -> str:
             return rf'^\(contains ~~~\): (u|)\'{re.escape(text)}\'$'
 
         # Overlength
-        def generate_overlength_exc_regex(text):
+        def generate_overlength_exc_regex(text) -> str:
             return rf'^\(over 255 bytes\): (u|)\'{re.escape(text)}\'$'
 
         # Namespace prefix without actual title
-        def generate_has_no_title_exc_regex(text):
+        def generate_has_no_title_exc_regex(text) -> str:
             return rf'^(u|)\'{re.escape(text.strip())}\' has no title\.$'
 
         title_tests = [
@@ -240,7 +241,7 @@ class LinkTestWikiEn(LinkTestCase):
     code = 'en'
 
     def setUp(self) -> None:
-        """Setup tests."""
+        """Set up tests."""
         super().setUp()
         config.mylang = 'en'
         config.family = 'wikipedia'
@@ -312,7 +313,7 @@ class TestPartiallyQualifiedExplicitLinkDifferentFamilyParser(LinkTestCase):
     code = 'en'
 
     def setUp(self) -> None:
-        """Setup tests."""
+        """Set up tests."""
         super().setUp()
         config.mylang = 'en'
         config.family = 'wikisource'
@@ -388,7 +389,7 @@ class TestFullyQualifiedLinkDifferentFamilyParser(LinkTestCase):
     PATTERN = '{colon}{first}:{second}:{title}'
 
     def setUp(self) -> None:
-        """Setup tests."""
+        """Set up tests."""
         super().setUp()
         config.mylang = 'en'
         config.family = 'wikisource'
@@ -438,7 +439,7 @@ class TestFullyQualifiedExplicitLinkNoLangConfigFamilyParser(LinkTestCase):
     code = 'en'
 
     def setUp(self) -> None:
-        """Setup tests."""
+        """Set up tests."""
         super().setUp()
         config.mylang = 'wikidata'
         config.family = 'wikidata'
@@ -492,7 +493,7 @@ class TestFullyQualifiedNoLangFamilyExplicitLinkParser(LinkTestCase):
     }
 
     def setUp(self) -> None:
-        """Setup tests."""
+        """Set up tests."""
         super().setUp()
         config.mylang = 'en'
         config.family = 'wikipedia'
@@ -526,7 +527,7 @@ class TestFullyQualifiedOneSiteFamilyExplicitLinkParser(LinkTestCase):
     code = 'species'
 
     def setUp(self) -> None:
-        """Setup tests."""
+        """Set up tests."""
         super().setUp()
         config.mylang = 'en'
         config.family = 'wikipedia'
@@ -617,7 +618,7 @@ class TestPartiallyQualifiedImplicitLinkDifferentFamilyParser(LinkTestCase):
     code = 'en'
 
     def setUp(self) -> None:
-        """Setup tests."""
+        """Set up tests."""
         super().setUp()
         config.mylang = 'en'
         config.family = 'wikisource'
@@ -668,7 +669,7 @@ class TestFullyQualifiedImplicitLinkNoLangConfigFamilyParser(LinkTestCase):
     code = 'en'
 
     def setUp(self) -> None:
-        """Setup tests."""
+        """Set up tests."""
         super().setUp()
         config.mylang = 'wikidata'
         config.family = 'wikidata'
@@ -714,7 +715,7 @@ class TestFullyQualifiedNoLangFamilyImplicitLinkParser(LinkTestCase):
     code = 'test'
 
     def setUp(self) -> None:
-        """Setup tests."""
+        """Set up tests."""
         super().setUp()
         config.mylang = 'en'
         config.family = 'wikipedia'
@@ -752,7 +753,7 @@ class TestFullyQualifiedOneSiteFamilyImplicitLinkParser(LinkTestCase):
     code = 'species'
 
     def setUp(self) -> None:
-        """Setup tests."""
+        """Set up tests."""
         super().setUp()
         config.mylang = 'en'
         config.family = 'wikipedia'

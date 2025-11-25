@@ -1,6 +1,6 @@
 """Object representing API parameter information."""
 #
-# (C) Pywikibot team, 2014-2024
+# (C) Pywikibot team, 2014-2025
 #
 # Distributed under the terms of the MIT license.
 #
@@ -11,8 +11,13 @@ from typing import Any
 
 import pywikibot
 from pywikibot import config
-from pywikibot.backports import Iterable, batched
-from pywikibot.tools import classproperty, deprecated, remove_last_args
+from pywikibot.backports import Dict, Iterable, Set, batched
+from pywikibot.tools import (
+    classproperty,
+    deprecated,
+    deprecated_args,
+    remove_last_args,
+)
 
 
 __all__ = ['ParamInfo']
@@ -31,6 +36,9 @@ class ParamInfo(Sized, Container):
     init_modules = frozenset(['main', 'paraminfo'])
     param_modules = ('list', 'meta', 'prop')
 
+    _action_modules: frozenset[str]
+    _modules: Dict[str, Set[str] | Dict[str, str]]
+
     @remove_last_args(['modules_only_mode'])
     def __init__(self,
                  site,
@@ -45,16 +53,14 @@ class ParamInfo(Sized, Container):
         self.site = site
 
         # Keys are module names, values are the raw responses from the server.
-        self._paraminfo = {}
+        self._paraminfo: dict[str, Any] = {}
 
         # Cached data.
-        self._prefixes = {}
-        self._prefix_map = {}
-        self._with_limits = None
+        self._prefix_map: dict[str, str] = {}
 
         self._action_modules = frozenset()  # top level modules
         self._modules = {}  # filled in _init() (and enlarged in fetch)
-        self._limit = None
+        self._limit: int | None = None
 
         self._preloaded_modules = self.init_modules
         if preloaded_modules:
@@ -69,7 +75,7 @@ class ParamInfo(Sized, Container):
             if self._action_modules:
                 assert modules == self._action_modules
             else:
-                self._action_modules = modules
+                self._action_modules = frozenset(modules)
         elif name in self._modules:
             # update required to updates from dict and set
             self._modules[name].update(modules)
@@ -333,9 +339,10 @@ class ParamInfo(Sized, Container):
         """Return number of cached modules."""
         return len(self._paraminfo)
 
+    @deprecated_args(module='module_name')  # since 10.5.0
     def parameter(
         self,
-        module: str,
+        module_name: str,
         param_name: str
     ) -> dict[str, Any] | None:
         """Get details about one modules parameter.
@@ -347,9 +354,9 @@ class ParamInfo(Sized, Container):
         :return: metadata that describes how the parameter may be used
         """
         try:
-            module = self[module]
+            module = self[module_name]
         except KeyError:
-            raise ValueError(f"paraminfo for '{module}' not loaded")
+            raise ValueError(f"paraminfo for '{module_name}' not loaded")
 
         try:
             params = module['parameters']

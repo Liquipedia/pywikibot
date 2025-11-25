@@ -13,7 +13,7 @@ repos:
     hooks:
       - id: commit-message-validator
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
       - id: check-added-large-files
         args:
@@ -63,15 +63,16 @@ repos:
         entry: tests/hooks/copyright_fixer.py
         files: .+\.py$
         language: python
+        require_serial: true
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.12.1
+    rev: v0.14.1
     hooks:
       - id: ruff-check
         alias: ruff
         args:
           - --fix
   - repo: https://github.com/asottile/pyupgrade
-    rev: v3.20.0
+    rev: v3.21.0
     hooks:
       - id: pyupgrade
         args:
@@ -88,12 +89,12 @@ repos:
           - --remove-unused-variables
         exclude: ^pywikibot/backports\.py$
   - repo: https://github.com/PyCQA/isort
-    rev: 6.0.1
+    rev: 6.1.0
     hooks:
       - id: isort
         exclude: ^pwb\.py$
   - repo: https://github.com/jshwi/docsig
-    rev: v0.69.4
+    rev: v0.71.0
     hooks:
       - id: docsig
         exclude: ^(tests|scripts)
@@ -103,6 +104,7 @@ repos:
       - id: flake8
         args:
           - --doctests
+          - --config=tox.ini
         additional_dependencies:
           # Due to incompatibilities between packages the order matters.
           - flake8-bugbear>=24.12.12
@@ -110,3 +112,29 @@ repos:
           - flake8-print>=5.0.0
           - flake8-tuple>=0.4.1
           - pep8-naming>=0.15.1
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.18.2
+    hooks:
+      - id: mypy
+        args:
+          - --config-file=pyproject.toml
+          - --follow-imports=silent
+        additional_dependencies:
+          - types-PyMySQL
+          - types-requests
+        # Test for files which already passed in past.
+        # They should be also used in conftest.py to exclude them from non-voting mypy test.
+        files: |
+          (?x)^pywikibot/(
+            (__metadata__|backports|config|cosmetic_changes|daemonize|diff|echo|exceptions|fixes|logging|plural|time|titletranslate)|
+            (comms|data|families|specialbots)/__init__|
+            comms/eventstreams|
+            data/(api/(__init__|_optionset)|citoid|memento|wikistats)|
+            families/[a-z][a-z\d]+_family|
+            page/(__init__|_decorators|_page|_revision)|
+            pagegenerators/(__init__|_filters)|
+            scripts/(?:i18n/)?__init__|
+            site/(__init__|_basesite|_decorators|_interwikimap|_tokenwallet|_upload)|
+            tools/(_deprecate|_logging|_unidata|chars|formatter)|
+            userinterfaces/(__init__|_interface_base|buffer_interface|terminal_interface|transliteration)
+          )\.py$

@@ -531,6 +531,8 @@ def replaceExcept(text: str,
 
         if appendid:
             idText = getID( replaced )
+        else:
+            idText = ''
 
         text = text[:match.start()] + replacement + idText + text[match.end():]
 

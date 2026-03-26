@@ -410,7 +410,7 @@ def getID( i ):
 def checkUnique( id ):
     import os
     # if idList.txt doesn't exist create it
-    if not os.path.exists('/idCache/idList.txt'):
+    if not os.path.exists('idCache/idList.txt'):
         with open('idCache/idList.txt', 'x'): pass
 
     #open ID List

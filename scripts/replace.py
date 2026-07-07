@@ -107,6 +107,10 @@ Furthermore, the following command line parameters are supported:
 
 -fullsummary      Use one large summary for all command line replacements.
 
+-appendid         append a matchgroup id after each replacement (used for bracket conversions)
+
+-bottomtext       text to add at the bottom of the page
+
 
 *Replacement parameters*
     Replacement parameters are pairs of arguments given to the script.
@@ -470,7 +474,8 @@ class XmlDumpReplacePageGenerator:
                     new_text = textlib.replaceExcept(
                         new_text, replacement.old_regex, replacement.new,
                         self.excsInside + replacement.get_inside_exceptions(),
-                        site=self.site)
+                        site=self.site,
+                        appendid=self.opt.appendid)
                 if new_text != entry.text:
                     yield pywikibot.Page(self.site, entry.title)
 
@@ -529,6 +534,8 @@ class ReplaceRobot(SingleSiteBot, ExistingPageBot):
             dictionary in :func:`textlib._create_default_regexes` or must be
             accepted by :func:`textlib.get_regexes`.
 
+    :keyword appendid: append each replacement with a generated matchgroup id
+    :type appendid: bool
     :keyword allowoverlap: when matches overlap, all of them are replaced.
     :type allowoverlap: bool
     :keyword recursive: Recurse replacement as long as possible.
@@ -563,6 +570,8 @@ class ReplaceRobot(SingleSiteBot, ExistingPageBot):
             'recursive': False,
             'sleep': 0.0,
             'summary': None,
+            'appendid': False,
+            'bottomtext': None,
         })
         super().__init__(generator=generator, **kwargs)
 
@@ -640,7 +649,8 @@ class ReplaceRobot(SingleSiteBot, ExistingPageBot):
             new_text = textlib.replaceExcept(
                 new_text, replacement.old_regex, replacement.new,
                 exceptions + replacement.get_inside_exceptions(),
-                allowoverlap=self.opt.allowoverlap, site=self.site)
+                allowoverlap=self.opt.allowoverlap, site=self.site,
+                appendid=self.opt.appendid)
             if old_text != new_text:
                 applied.add(replacement)
 
@@ -731,6 +741,9 @@ class ReplaceRobot(SingleSiteBot, ExistingPageBot):
                 cats.append(self.opt.addcat)
                 new_text = textlib.replaceCategoryLinks(new_text, cats,
                                                         site=page.site)
+
+        if self.opt.bottomtext:
+            new_text += '\n' + self.opt.bottomtext
 
         context = 0
         while True:
@@ -969,7 +982,7 @@ def main(*args: str) -> None:
             fixes_set.append(value)
         elif opt == '-sleep':
             options['sleep'] = float(value)
-        elif opt in ('-allowoverlap', '-always', '-quiet', '-recursive'):
+        elif opt in ('-allowoverlap', '-always', '-quiet', '-recursive', '-appendid'):
             options[opt[1:]] = True
         elif opt == '-nocase':
             flags |= re.IGNORECASE
@@ -989,6 +1002,8 @@ def main(*args: str) -> None:
             file_replacements = handle_pairsfile(value)
         elif opt == '-nopreload':
             preload = False
+        elif opt == '-bottomtext':
+            options['bottomtext'] = value
         else:
             commandline_replacements.append(arg)
 

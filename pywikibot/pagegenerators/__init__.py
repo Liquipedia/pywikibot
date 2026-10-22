@@ -1,3 +1,8 @@
+#
+# (C) Pywikibot team, 2008-2026
+#
+# Distributed under the terms of the MIT license.
+#
 """This module offers a wide variety of page generators.
 
 A page generator is an object that is iterable (see :pep:`255`) and
@@ -10,18 +15,14 @@ titles to standard output.
 These parameters are supported to specify which pages titles to be used:
 
 &params;
+
 """
-#
-# (C) Pywikibot team, 2008-2025
-#
-# Distributed under the terms of the MIT license.
-#
 from __future__ import annotations
 
+from collections.abc import Callable, Generator, Iterable
 from typing import TYPE_CHECKING, Any
 
 import pywikibot
-from pywikibot.backports import Callable, Generator, Iterable
 from pywikibot.pagegenerators._factory import GeneratorFactory
 from pywikibot.pagegenerators._filters import (
     CategoryFilterPageGenerator,
@@ -213,7 +214,7 @@ GENERATOR OPTIONS
 
                         logevent,username,start,end
 
-                    .. deprecated:: 9.2
+                    .. version-deprecated:: 9.2
                        backward compatible *total* argument like
                        ``logevent,username,total``; use ``-limit`` filter
                        option instead (see below).
@@ -313,7 +314,14 @@ GENERATOR OPTIONS
                     "-start:Template:!" will make the bot work on all pages
                     in the template namespace.
 
-                    default value is start:!
+                    Default value is start:!
+
+-until              Specifies the page title at which the robot should
+                    stop alphabetically through all pages on the home wiki.
+
+                    .. version-added:: 11.3
+                    .. version-changed:: 11.4.1
+                       May be used without ``-start``.
 
 -prefixindex        Work on pages commencing with a common prefix.
 
@@ -476,9 +484,11 @@ FILTER OPTIONS
                     pages in total. If used with multiple generators,
                     pages are yielded in a roundrobin way.
 
--namespaces         Filter the page generator to only yield pages in the
--namespace          specified namespaces. Separate multiple namespace
--ns                 numbers or names with commas.
+-namespaces         Aliases :kbd:`-namespace` and :kbd:`-ns`.
+
+                    Filter the page generator to only yield pages in the
+                    specified namespaces. Separate multiple namespace
+                    numbers or names with commas.
 
                     Examples::
 
@@ -491,6 +501,11 @@ FILTER OPTIONS
 
                     -ns:not:2,3
                     -ns:not:Help,File
+
+                    .. version-changed:: 11.4.1
+                       When using the leading ``not`` directive, the special
+                       namespaces ``-1`` and ``-2`` are not included. To
+                       add them, specify them explicitly, e.g. ``-ns:-1``.
 
                     If used with -newpages/-random/-randomredirect/-linter
                     generators, -namespace/ns must be provided before
@@ -570,7 +585,7 @@ __doc__ = __doc__.replace('&params;', parameterHelp)
 
 
 def PageClassGenerator(generator: Iterable[pywikibot.page.Page]
-                       ) -> Generator[pywikibot.page.Page, None, None]:
+                       ) -> Generator[pywikibot.page.Page]:
     """Yield pages from another generator as Page subclass objects.
 
     The page class type depends on the page namespace. Objects may be
@@ -590,7 +605,7 @@ def PageClassGenerator(generator: Iterable[pywikibot.page.Page]
 def PageWithTalkPageGenerator(
     generator: Iterable[pywikibot.page.BasePage],
     return_talk_only: bool = False,
-) -> Generator[pywikibot.page.BasePage, None, None]:
+) -> Generator[pywikibot.page.BasePage]:
     """Yield pages and associated talk pages from another generator.
 
     Only yields talk pages if the original generator yields a non-talk
@@ -611,7 +626,7 @@ def RepeatingGenerator(
     sleep_duration: int = 60,
     total: int | None = None,
     **kwargs: Any,
-) -> Generator[pywikibot.page.Page, None, None]:
+) -> Generator[pywikibot.page.Page]:
     """Yield items in live time.
 
     The provided generator must support parameter 'start', 'end',
@@ -630,13 +645,13 @@ def RepeatingGenerator(
     will always be discarded to prevent the generator yielding items
     in wrong order.
 
-    :param generator: a function returning a generator that will be queried
-    :param key_func: a function returning key that will be used to detect
+    :param generator: A function returning a generator that will be queried
+    :param key_func: A function returning key that will be used to detect
         duplicate entry
-    :param sleep_duration: duration between each query
-    :param total: if it is a positive number, iterate no more than this
+    :param sleep_duration: Duration between each query
+    :param total: If it is a positive number, iterate no more than this
         number of items in total. Otherwise, iterate forever
-    :return: a generator yielding items in ascending order by time
+    :return: A generator yielding items in ascending order by time
     """
     kwargs.pop('reverse', None)  # always get newest item first
     kwargs.pop('start', None)  # don't set start time
@@ -644,8 +659,7 @@ def RepeatingGenerator(
 
     seen: set[Any] = set()
     while total is None or len(seen) < total:
-        def filtered_generator() -> Generator[pywikibot.page.BasePage,
-                                              None, None]:
+        def filtered_generator() -> Generator[pywikibot.page.BasePage]:
             for item in generator(total=None if seen else 1, **kwargs):
                 key = key_func(item)
                 if key not in seen:
@@ -663,11 +677,11 @@ def RepeatingGenerator(
 def PreloadingGenerator(generator: Iterable[pywikibot.page.Page],
                         groupsize: int = 50,
                         quiet: bool = False
-                        ) -> Generator[pywikibot.page.Page, None, None]:
+                        ) -> Generator[pywikibot.page.Page]:
     """Yield preloaded pages taken from another generator.
 
-    :param generator: pages to iterate over
-    :param groupsize: how many pages to preload at once
+    :param generator: Pages to iterate over
+    :param groupsize: How many pages to preload at once
     :param quiet: If False (default), show the "Retrieving pages"
         message
     """
@@ -695,11 +709,11 @@ def DequePreloadingGenerator(
     generator: DequeGenerator,
     groupsize: int = 50,
     quiet: bool = False,
-) -> Generator[pywikibot.page.Page, None, None]:
+) -> Generator[pywikibot.page.Page]:
     """Preload generator of type DequeGenerator.
 
-    :param generator: pages to iterate over
-    :param groupsize: how many pages to preload at once
+    :param generator: Pages to iterate over
+    :param groupsize: How many pages to preload at once
     :param quiet: If False (default), show the "Retrieving pages"
         message
     """
@@ -717,13 +731,13 @@ def DequePreloadingGenerator(
 def PreloadingEntityGenerator(
     generator: Iterable[pywikibot.page.WikibaseEntity],
     groupsize: int = 50,
-) -> Generator[pywikibot.page.WikibaseEntity, None, None]:
+) -> Generator[pywikibot.page.WikibaseEntity]:
     """Yield preloaded pages taken from another generator.
 
     Function basically is copied from above, but for Wikibase entities.
 
-    :param generator: pages to iterate over
-    :param groupsize: how many pages to preload at once
+    :param generator: Pages to iterate over
+    :param groupsize: How many pages to preload at once
     """
     sites: dict[pywikibot.site.BaseSite,
                 list[pywikibot.page.WikibaseEntity]] = {}

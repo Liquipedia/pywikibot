@@ -1,72 +1,21 @@
-Current Release Changes
-=======================
+Release 11.4.2
+==============
 
-* Add support for pcmwikiquote and minwikisource. (:phab:`T408345`, :phab:`T408353`)
-* Deprecate dysfunctional :meth:`APISite.alllinks()
-  <pywikibot.site._generators.GeneratorsMixin.alllinks>`. (:phab:`T359427`, :phab:`T407708`)
-* Refactor ``replace_magicwords`` in
-  :meth:`cosmetic_changes.CosmeticChangesToolkit.translateMagicWords`. (:phab:`T396715`)
-* Deprecate old ``(type, value, traceback)`` signature in
-  :meth:`tools.collections.GeneratorWrapper.throw`. (:phab:`T340641`)
-* Replace default timetravel.mementoweb.org with web.archive.org in :mod:`data.memento` module.
-  (:phab:`T400570`, :phab:`T407694`)
-* i18n updates
+* Add support for isvwiki. (:phab:`T429937`)
+* Remove obsolete WMF_CACERT legacy check in :mod:`pywikibot.scripts.version`. (:phab:`T430266`)
 
 
 Deprecations
 ============
 
 This section lists features, methods, parameters, or attributes that are deprecated
-and scheduled for removal in future Pywikibot releases.  
+and scheduled for removal in future Pywikibot releases.
 
 Deprecated items may still work in the current release but are no longer recommended for use.
-Users should update their code according to the recommended alternatives.  
+Users should update their code according to the recommended alternatives.
 
 Pywikibot follows a clear deprecation policy: features are typically deprecated in one release and
-removed in in the third subsequent major release, remaining available for the two releases in between.
-
-
-Pending removal in Pywikibot 11
--------------------------------
-
-* 10.7.0: Dysfunctional :meth:`APISite.alllinks()
-  <pywikibot.site._generators.GeneratorsMixin.alllinks>` will be removed.
-  (:phab:`T359427`, :phab:`T407708`)
-* 10.6.0: Python 3.8 support is deprecated and will be dropped soon
-* 8.4.0: :attr:`data.api.QueryGenerator.continuekey` will be removed in favour of
-  :attr:`data.api.QueryGenerator.modules`
-* 8.4.0: The *modules_only_mode* parameter in the :class:`data.api.ParamInfo` class, its
-  *paraminfo_keys* class attribute, and its ``preloaded_modules`` property will be removed
-* 8.4.0: The *dropdelay* and *releasepid* attributes of the :class:`throttle.Throttle` class will be
-  removed in favour of the *expiry* class attribute
-* 8.2.0: The :func:`tools.itertools.itergroup` function will be removed in favour of the
-  :func:`backports.batched` function
-* 8.2.0: The *normalize* parameter in the :meth:`pywikibot.WbTime.toTimestr` and
-  :meth:`pywikibot.WbTime.toWikibase` methods will be removed
-* 8.1.0: The inheritance of the :exc:`exceptions.NoSiteLinkError` exception from
-  :exc:`exceptions.NoPageError` will be removed
-* 8.1.0: The ``exceptions.Server414Error`` exception is deprecated in favour of the
-  :exc:`exceptions.Client414Error` exception
-* 8.0.0: The :meth:`Timestamp.clone()<pywikibot.time.Timestamp.clone>` method is deprecated in
-  favour of the ``Timestamp.replace()`` method
-* 8.0.0: The :meth:`family.Family.maximum_GET_length` method is deprecated in favour of the
-  :ref:`config.maximum_GET_length<Account Settings>` configuration option (:phab:`T325957`)
-* 8.0.0: The ``addOnly`` parameter in the :func:`textlib.replaceLanguageLinks` and
-  :func:`textlib.replaceCategoryLinks` functions is deprecated in favour of ``add_only``
-* 8.0.0: The regex attributes ``ptimeR``, ``ptimeznR``, ``pyearR``, ``pmonthR``, and ``pdayR`` of
-  the :class:`textlib.TimeStripper` class are deprecated in favour of the ``patterns`` attribute,
-  which is a :class:`textlib.TimeStripperPatterns` object
-* 8.0.0: The ``groups`` attribute of the :class:`textlib.TimeStripper` class is deprecated in favour
-  of the :data:`textlib.TIMEGROUPS` constant
-* 8.0.0: The :meth:`LoginManager.get_login_token<login.ClientLoginManager.get_login_token>` method
-  has been replaced by ``login.ClientLoginManager.site.tokens['login']``
-* 8.0.0: The ``data.api.LoginManager()`` constructor is deprecated in favour of the
-  :class:`login.ClientLoginManager` class
-* 8.0.0: The :meth:`APISite.messages()<pywikibot.site._apisite.APISite.messages>` method is
-  deprecated in favour of the :attr:`userinfo['messages']<pywikibot.site._apisite.APISite.userinfo>`
-  attribute
-* 8.0.0: The :meth:`Page.editTime()<page.BasePage.editTime>` method is deprecated and should be
-  replaced by the :attr:`Page.latest_revision.timestamp<page.BasePage.latest_revision>` attribute
+removed in the third subsequent major release, remaining available for the two releases in between.
 
 
 Pending removal in Pywikibot 12
@@ -98,8 +47,8 @@ Pending removal in Pywikibot 12
   <pywikibot.site._apisite.APISite.namespace>` was renamed to ``all_ns``
 * 9.0.0: ``filter`` parameter of :func:`date.dh` was renamed to ``filter_func``
 * 9.0.0: ``dict`` parameter of :class:`data.api.OptionSet` was renamed to ``data``
-* 9.0.0: :func:`pywikibot.version.get_toolforge_hostname` is deprecated with no replacement
-* 9.0.0: ``allrevisions`` parameter of :class:`xmlreader.XmpDump` is deprecated, use ``revisions`` instead
+* 9.0.0: :func:`version.get_toolforge_hostname` is deprecated with no replacement
+* 9.0.0: ``allrevisions`` parameter of :class:`xmlreader.XmlDump` is deprecated, use ``revisions`` instead
   (:phab:`T340804`)
 * 9.0.0: ``iteritems`` method of :class:`data.api.Request` will be removed in favour of ``items``
 * 9.0.0: ``SequenceOutputter.output()`` is deprecated in favour of the
@@ -109,7 +58,7 @@ Pending removal in Pywikibot 12
 Pending removal in Pywikibot 13
 -------------------------------
 
-* 10.6.0: The old ``(type, value, traceback)`` signature in
+* 10.7.0: The old ``(type, value, traceback)`` signature in
   :meth:`tools.collections.GeneratorWrapper.throw` will be removed in Pywikibot 13, or earlier if it
   is dropped from a future Python release. (:phab:`T340641`)
 * 10.6.0: :meth:`Family.isPublic()<family.Family.isPublic>` will be removed (:phab:`T407049`)
@@ -152,3 +101,19 @@ Pending removal in Pywikibot 13
   'millennium' must be used instead
 * 10.0.0: *includeredirects* parameter of :func:`pagegenerators.AllpagesPageGenerator` and
   :func:`pagegenerators.PrefixingPageGenerator` is deprecated and should be replaced by *filterredir*
+
+Pending removal in Pywikibot 14
+-------------------------------
+
+* 11.4.0: The signature of :meth:`APISite.allusers()
+  <pywikibot.site._generators.GeneratorsMixin.allusers>` was changed;
+  all parameters are keyword-only.
+* 11.4.0: The signature of :func:`tools.open_archive` was changed. *filename* parameter is
+  positional only, *use_extension* is keyword only.
+* 11.0.0: The User-Agent variable *script_product* is deprecated; use *script* instead.
+  The User-Agent variable *version* is deprecated; use *revision* instead.
+  The User-Agent variables *lang*, *code* and *family* are deprecated; use *site* instead.
+* 11.0.0: Positional argument for *block* parameter of :func:`pywikibot.async_manager` is
+  deprecated; use a keyword argument instead.
+* 11.0.0: Keyword parameters for *text_a* and *text_b* of :class:`diff.PatchManager` are deprecated.
+  Positional parameters for *by_letter* and *replace_invisible* are deprecated.

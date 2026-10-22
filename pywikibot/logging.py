@@ -1,6 +1,11 @@
+#
+# (C) Pywikibot team, 2010-2026
+#
+# Distributed under the terms of the MIT license.
+#
 """User output/logging functions.
 
-Six output functions are defined. Each requires a ``msg`` argument
+Six output functions are defined. Each requires a ``msg`` argument.
 All of these functions generate a message to the log file if
 logging is enabled (`-log` or `-debug` command line arguments).
 
@@ -23,11 +28,6 @@ argument, which is a string indicating the debugging layer.
    - :pyhow:`Logging HOWTO<logging>`
    - :python:`Logging Cookbook<howto/logging-cookbook.html>`
 """
-#
-# (C) Pywikibot team, 2010-2025
-#
-# Distributed under the terms of the MIT license.
-#
 from __future__ import annotations
 
 
@@ -42,12 +42,11 @@ __all__ = (
 import logging
 import os
 import sys
+from collections.abc import Callable
 
 # logging levels
 from logging import CRITICAL, DEBUG, ERROR, INFO, WARNING
 from typing import Any
-
-from pywikibot.backports import Callable
 
 
 STDOUT = 16  #:
@@ -92,7 +91,7 @@ def logoutput(msg: Any,
     function with a different logging level.
 
     *msg* can contain special sequences to create colored output. These
-    consist of the color name in angle bracket, e. g. <<lightpurple>>.
+    consist of the color name in angle brackets, e. g. <<lightpurple>>.
     <<default>> resets the color.
 
     *args* are the arguments which are merged into *msg* using the
@@ -106,12 +105,12 @@ def logoutput(msg: Any,
     ``exc_info=True``, which causes the log message to include an
     exception traceback.
 
-    .. versionchanged:: 7.2
+    .. version-changed:: 7.2
        Positional arguments for *decoder* and *newline* are deprecated;
        keyword arguments should be used.
-    .. versionchanged:: 10.0
-       *args* parameter can now given as formatting arguments directly
-       to the logger.
+    .. version-changed:: 10.0
+       *args* parameter can now be given as formatting arguments
+       directly to the logger.
 
     :param msg: The message to be printed.
     :param args: Passed as string formatter options to the logger.
@@ -159,7 +158,7 @@ def info(msg: Any = '', *args: Any, **kwargs: Any) -> None:
     ``msg`` will be sent to stderr via :mod:`pywikibot.userinterfaces`.
     It may be omitted and a newline is printed in that case.
     The arguments are interpreted as for :func:`logoutput`. *args* can
-    be uses as formatting arguments for all logging functions of this
+    be used as formatting arguments for all logging functions of this
     module. But this works for old ``%``-formatting only:
 
     >>> info('Hello %s', 'World')  # doctest: +SKIP
@@ -167,13 +166,13 @@ def info(msg: Any = '', *args: Any, **kwargs: Any) -> None:
     >>> info('Pywikibot %(version)d', {'version': 10})  # doctest: +SKIP
     Pywikibot 10
 
-    .. versionadded:: 7.2
+    .. version-added:: 7.2
        was renamed from :func:`output`. Positional arguments for
        *decoder* and *newline* are deprecated; keyword arguments should
        be used. Keyword parameter *layer* was added.
-    .. versionchanged:: 10.0
-       *args* parameter can now given as formatting arguments directly
-       to the logger.
+    .. version-changed:: 10.0
+       *args* parameter can now be given as formatting arguments
+       directly to the logger.
 
     .. seealso::
        :python:`Logger.info()<library/logging.html#logging.Logger.info>`
@@ -185,9 +184,9 @@ output = info
 """Synonym for :func:`info` for backward compatibility. The arguments are
 interpreted as for :func:`logoutput`.
 
-.. versionchanged:: 7.2
+.. version-changed:: 7.2
    was renamed to :func:`info`; `text` was renamed to `msg`; `msg`
-   paramerer may be omitted; only keyword arguments are allowed except
+   parameter may be omitted; only keyword arguments are allowed except
    for `msg`. Keyword parameter *layer* was added.
 .. seealso::
    :python:`Logger.info()<library/logging.html#logging.Logger.info>`
@@ -204,13 +203,13 @@ def stdout(msg: Any = '', *args: Any, **kwargs: Any) -> None:
 
     The arguments are interpreted as for :func:`logoutput`.
 
-    .. versionchanged:: 7.2
+    .. version-changed:: 7.2
        `text` was renamed to `msg`; `msg` parameter may be omitted;
        only keyword arguments are allowed except for `msg`. Keyword
        parameter *layer* was added.
-    .. versionchanged:: 10.0
-       *args* parameter can now given as formatting arguments directly
-       to the logger.
+    .. version-changed:: 10.0
+       *args* parameter can now be given as formatting arguments
+       directly to the logger.
     .. seealso::
        - :python:`Logger.log()<library/logging.html#logging.Logger.log>`
        - :wiki:`Pipeline (Unix)`
@@ -224,12 +223,12 @@ def warning(msg: Any, *args: Any, **kwargs: Any) -> None:
     ``msg`` will be sent to stderr via :mod:`pywikibot.userinterfaces`.
     The arguments are interpreted as for :func:`logoutput`.
 
-    .. versionchanged:: 7.2
+    .. version-changed:: 7.2
        `text` was renamed to `msg`; only keyword arguments are allowed
        except for `msg`. Keyword parameter *layer* was added.
-    .. versionchanged:: 10.0
-       *args* parameter can now given as formatting arguments directly
-       to the logger.
+    .. version-changed:: 10.0
+       *args* parameter can now be given as formatting arguments
+       directly to the logger.
     .. seealso::
        :python:`Logger.warning()<library/logging.html#logging.Logger.warning>`
     """
@@ -242,12 +241,12 @@ def error(msg: Any, *args: Any, **kwargs: Any) -> None:
     ``msg`` will be sent to stderr via :mod:`pywikibot.userinterfaces`.
     The arguments are interpreted as for :func:`logoutput`.
 
-    .. versionchanged:: 7.2
+    .. version-changed:: 7.2
        `text` was renamed to `msg`; only keyword arguments are allowed
        except for `msg`. Keyword parameter *layer* was added.
-    .. versionchanged:: 10.0
-       *args* parameter can now given as formatting arguments directly
-       to the logger.
+    .. version-changed:: 10.0
+       *args* parameter can now be given as formatting arguments
+       directly to the logger.
     .. seealso::
        :python:`Logger.error()<library/logging.html#logging.Logger.error>`
     """
@@ -259,12 +258,12 @@ def log(msg: Any, *args: Any, **kwargs: Any) -> None:
 
     The arguments are interpreted as for :func:`logoutput`.
 
-    .. versionchanged:: 7.2
+    .. version-changed:: 7.2
        `text` was renamed to `msg`; only keyword arguments are allowed
        except for `msg`. Keyword parameter *layer* was added.
-    .. versionchanged:: 10.0
-       *args* parameter can now given as formatting arguments directly
-       to the logger.
+    .. version-changed:: 10.0
+       *args* parameter can now be given as formatting arguments
+       directly to the logger.
     .. seealso::
        :python:`Logger.log()<library/logging.html#logging.Logger.log>`
     """
@@ -277,12 +276,12 @@ def critical(msg: Any, *args: Any, **kwargs: Any) -> None:
     ``msg`` will be sent to stderr via :mod:`pywikibot.userinterfaces`.
     The arguments are interpreted as for :func:`logoutput`.
 
-    .. versionchanged:: 7.2
+    .. version-changed:: 7.2
        `text` was renamed to `msg`; only keyword arguments are allowed
        except for `msg`. Keyword parameter *layer* was added.
-    .. versionchanged:: 10.0
-       *args* parameter can now given as formatting arguments directly
-       to the logger.
+    .. version-changed:: 10.0
+       *args* parameter can now be given as formatting arguments
+       directly to the logger.
     .. seealso::
        :python:`Logger.critical()
        <library/logging.html#logging.Logger.critical>`
@@ -295,12 +294,12 @@ def debug(msg: Any, *args: Any, **kwargs: Any) -> None:
 
     The arguments are interpreted as for :func:`logoutput`.
 
-    .. versionchanged:: 7.2
+    .. version-changed:: 7.2
        `layer` parameter is optional; `text` was renamed to `msg`;
        only keyword arguments are allowed except for `msg`.
-    .. versionchanged:: 10.0
-       *args* parameter can now given as formatting arguments directly
-       to the logger.
+    .. version-changed:: 10.0
+       *args* parameter can now be given as formatting arguments
+       directly to the logger.
     .. seealso::
        :python:`Logger.debug()<library/logging.html#logging.Logger.debug>`
     """
@@ -331,15 +330,15 @@ def exception(msg: Any = None, *args: Any,
     ``msg`` will be sent to stderr via :mod:`pywikibot.userinterfaces`.
     The arguments are interpreted as for :func:`logoutput`.
 
-    .. versionchanged:: 7.2
+    .. version-changed:: 7.2
        only keyword arguments are allowed except for `msg`;
        `exc_info` keyword is to be used instead of `tb`. Keyword
        parameter *layer* was added.
-    .. versionchanged:: 7.3
+    .. version-changed:: 7.3
        `exc_info` is True by default
-    .. versionchanged:: 10.0
-       *args* parameter can now given as formatting arguments directly
-       to the logger.
+    .. version-changed:: 10.0
+       *args* parameter can now be given as formatting arguments
+       directly to the logger.
     .. seealso::
        :python:`Logger.exception()
        <library/logging.html#logging.Logger.exception>`

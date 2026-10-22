@@ -175,6 +175,7 @@ cython_debug/
 
 throttle.ctrl
 user-*.py
+user-*.cfg
 *.bak
 *.lwp
 *.swp

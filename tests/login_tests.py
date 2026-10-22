@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
+#
+# (C) Pywikibot team, 2012-2026
+#
+# Distributed under the terms of the MIT license.
+#
 """Tests for LoginManager classes.
 
 e.g. used to test password-file based login.
 """
-#
-# (C) Pywikibot team, 2012-2025
-#
-# Distributed under the terms of the MIT license.
-#
 from __future__ import annotations
 
+import builtins
+import unittest
+import uuid
 from collections import defaultdict
 from io import StringIO
 from pathlib import Path
@@ -18,7 +21,7 @@ from unittest import mock
 from pywikibot.exceptions import NoUsernameError
 from pywikibot.login import LoginManager
 from pywikibot.tools import PYTHON_VERSION
-from tests.aspects import DefaultDrySiteTestCase, unittest
+from tests.aspects import DefaultDrySiteTestCase
 
 
 class FakeFamily:
@@ -186,6 +189,43 @@ class TestPasswordFile(DefaultDrySiteTestCase):
             ('~FakeUsername', BotPassword('~FakeSuffix', '~FakePassword'))
             """, '~FakePassword')
         self.assertEqual(obj.login_name, '~FakeUsername@~FakeSuffix')
+
+    def test_eval_security(self) -> None:
+        """Test security that password file does not use eval() function."""
+        # File-based checks are limited to Python 3.9 only.
+        # On newer versions, self.stat patching in setUp() fails,
+        # making the file appear to exist.
+        use_file = PYTHON_VERSION[:2] == (3, 9)
+
+        builtins.exploit_value = False
+        exploit_code = (
+            "__import__('builtins').__dict__"
+            ".__setitem__('exploit_value', True)"
+        )
+        if use_file:
+            exploit_filename = f'pwb_rce_{uuid.uuid4().hex[:8]}.txt'
+            exploit_file = Path(exploit_filename)
+            exploit_code = (
+                f"__import__('pathlib').Path('{exploit_filename}').touch() or "
+                + exploit_code
+            )
+
+        with self.subTest(test='Test ValueError'), \
+             self.assertRaisesRegex(ValueError,
+                                    'Invalid password line format'):
+            self._test_pwfile(f"""
+                ('en', 'wikipedia', 'victim', {exploit_code})
+                """, None)
+
+        with self.subTest(test='Test value was modified'):
+            self.assertFalse(exploit_value)  # noqa: F821
+
+        if use_file:
+            with self.subTest(test='Test file exists'):
+                self.assertFalse(exploit_file.exists())
+
+            # cleanup file (should never happen)
+            exploit_file.unlink(missing_ok=True)
 
 
 if __name__ == '__main__':

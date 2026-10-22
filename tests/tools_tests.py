@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""Test tools package alone which don't fit into other tests."""
 #
-# (C) Pywikibot team, 2015-2025
+# (C) Pywikibot team, 2015-2026
 #
 # Distributed under the terms of the MIT license.
+"""Test tools package alone which doesn't fit into other tests."""
 from __future__ import annotations
 
 import decimal
 import hashlib
+import io
 import os
-import subprocess
 import tempfile
 import unittest
 from collections import Counter, OrderedDict
@@ -20,6 +20,8 @@ from unittest import mock
 
 from pywikibot import config, tools
 from pywikibot.tools import (
+    PYTHON_VERSION,
+    SevenZipFile,
     cached,
     classproperty,
     has_module,
@@ -42,7 +44,7 @@ class OpenArchiveTestCase(TestCase):
 
     """Unit test class for tools.
 
-    The tests for open_archive requires that article-pyrus.xml* contain
+    The tests for open_archive require that article-pyrus.xml* contain
     all the same content after extraction. The content itself is not
     important. The file article-pyrus.xml_invalid.7z is not a valid 7z
     file and open_archive will fail extracting it using 7za.
@@ -70,7 +72,7 @@ class OpenArchiveTestCase(TestCase):
             self._get_content(self.base_file), self.original_content)
 
     def test_open_archive_bz2(self) -> None:
-        """Test open_archive with bz2 compressor in the standard library."""
+        """Test open_archive with bz2 compression in the standard library."""
         self.assertEqual(
             self._get_content(self.base_file + '.bz2'), self.original_content)
         self.assertEqual(
@@ -78,22 +80,78 @@ class OpenArchiveTestCase(TestCase):
             self.original_content)
 
     def test_open_archive_gz(self) -> None:
-        """Test open_archive with gz compressor in the standard library."""
+        """Test open_archive with gz compression in the standard library."""
         self.assertEqual(
             self._get_content(self.base_file + '.gz'), self.original_content)
 
     def test_open_archive_7z(self) -> None:
-        """Test open_archive with 7za if installed."""
-        with skipping(OSError, msg='7za not installed'):
-            subprocess.Popen(['7za'], stdout=subprocess.PIPE).stdout.close()
-
-        self.assertEqual(
-            self._get_content(self.base_file + '.7z'), self.original_content)
+        """Test open_archive with 7z if installed."""
+        with skipping(FileNotFoundError):
+            self.assertEqual(
+                self._get_content(self.base_file + '.7z'),
+                self.original_content
+            )
         with self.assertRaisesRegex(
                 OSError,
-                'Unexpected STDERR output from 7za '):
-            self._get_content(self.base_file + '_invalid.7z',
-                              use_extension=True)
+                'Unexpected STDERR output from .*7z'):
+            self._get_content(self.base_file + '_invalid.7z')
+
+    def test_7_zip_file(self) -> None:
+        """Test SevenZipFile class."""
+        filename = self.base_file + '.7z'
+        with skipping(FileNotFoundError), tools.open_archive(filename) as zf:
+            self.assertIsInstance(zf, SevenZipFile)
+            self.assertIsSubclass(type(zf), io.RawIOBase)
+            self.assertEqual(zf.name, filename)
+            self.assertEqual(zf.mode, 'rb')
+            self.assertFalse(zf.closed)
+            self.assertTrue(zf.readable())
+            self.assertEqual(repr(zf), f'tools.SevenZipFile({filename!r})')
+
+            for method_name in ('isatty', 'seekable', 'writable'):
+                with self.subTest(method=method_name):
+                    method = getattr(zf, method_name)
+                    self.assertFalse(method())
+
+            for method_name in ('fileno', 'tell', 'truncate'):
+                with (
+                    self.subTest(method=method_name),
+                    self.assertRaises(io.UnsupportedOperation)
+                ):
+                    method = getattr(zf, method_name)
+                    method()
+
+            with self.assertRaises(io.UnsupportedOperation):
+                zf.seek(0)
+
+            with self.assertRaises(io.UnsupportedOperation):
+                zf.write(b'RawIOBase.write method is not implemented')
+            with self.assertRaises(io.UnsupportedOperation):
+                zf.writelines([b'foo\n', b'bar\n'])
+
+            self.assertEqual(zf.read(100), self.original_content[:100])
+            zf.rewind()
+            buffer = zf.read(-1)
+            zf.rewind()
+            self.assertEqual(buffer, zf.readall())
+            zf.rewind()
+
+            lines = self.original_content.splitlines(keepends=True)
+            self.assertEqual(zf.readline(), lines[0])
+            zf.rewind()
+            self.assertEqual(zf.readlines(), lines)
+
+        self.assertTrue(zf.closed)
+        self.assertIsNone(zf._stream)
+        self.assertIsNone(zf._process)
+        self.assertEqual(repr(zf), 'tools.SevenZipFile[closed]')
+        with self.assertRaisesRegex(ValueError,
+                                    r'I/O operation on closed file'):
+            zf.read(100)
+        with self.assertRaisesRegex(ValueError,
+                                    r'I/O operation on closed file'):
+            zf.rewind()
+        zf.close()  # test that nothing happens here
 
     def test_open_archive_lzma(self) -> None:
         """Test open_archive with lzma compressor in the standard library."""
@@ -153,7 +211,7 @@ class OpenArchiveWriteTestCase(TestCase):
                 ValueError,
                 'Magic number detection only when reading'):
             tools.open_archive('/dev/null',  # writing without extension
-                               'wb', False)
+                               'wb', use_extension=False)
 
     def test_binary_mode(self) -> None:
         """Test that it uses binary mode."""
@@ -228,7 +286,7 @@ class MergeUniqueDicts(TestCase):
             tools.merge_unique_dicts(self.dct1, **self.dct1)
 
 
-class TestIsSliceWithEllipsis(TestCase):
+class TestIsliceWithEllipsis(TestCase):
 
     """Test islice_with_ellipsis."""
 
@@ -246,7 +304,7 @@ class TestIsSliceWithEllipsis(TestCase):
         self.assertEqual(it[-1], '…')
 
     def test_show_custom_marker(self) -> None:
-        """Test correct marker is shown with kwargs.."""
+        """Test correct marker is shown with kwargs."""
         stop = 2
         it = list(islice_with_ellipsis(self.it, stop, marker='new'))
         self.assertLength(it, stop + 1)  # +1 to consider marker.
@@ -561,7 +619,7 @@ class TestFilterUnique(TestCase):
 
 class TestFileModeChecker(TestCase):
 
-    """Test parsing password files."""
+    """Tests for tools.file_mode_checker."""
 
     net = False
 
@@ -604,13 +662,13 @@ class TestFileModeChecker(TestCase):
 
 
 def hash_func(digest):
-    """Function who gives a hashlib function."""
+    """Return a hash object for the given *digest* algorithm."""
     return hashlib.new(digest)
 
 
 class TestFileShaCalculator(TestCase):
 
-    r"""Test calculator of sha of a file.
+    r"""Test calculator of SHA of a file.
 
     There are two possible hash values for each test. The second one is
     for files with Windows line endings (\r\n).
@@ -627,7 +685,7 @@ class TestFileShaCalculator(TestCase):
     }
 
     def test_md5_complete_calculation(self) -> None:
-        """Test md5 of complete file."""
+        """Test MD5 of complete file."""
         for test, sha in self.md5_tests.items():
             with self.subTest(test=test):
                 res = tools.compute_file_hash(self.filename, sha=sha)
@@ -637,7 +695,7 @@ class TestFileShaCalculator(TestCase):
                 ))
 
     def test_md5_partial_calculation(self) -> None:
-        """Test md5 of partial file (1024 bytes)."""
+        """Test MD5 of partial file (1024 bytes)."""
         for test, sha in self.md5_tests.items():
             with self.subTest(test=test):
                 res = tools.compute_file_hash(self.filename, sha=sha,
@@ -648,7 +706,7 @@ class TestFileShaCalculator(TestCase):
                 ))
 
     def test_sha1_complete_calculation(self) -> None:
-        """Test sha1 of complete file."""
+        """Test SHA1 of complete file."""
         res = tools.compute_file_hash(self.filename, sha='sha1')
         self.assertIn(res, (
             '1c12696e1119493a625aa818a35c41916ce32d0c',
@@ -656,7 +714,7 @@ class TestFileShaCalculator(TestCase):
         ))
 
     def test_sha1_partial_calculation(self) -> None:
-        """Test sha1 of partial file (1024 bytes)."""
+        """Test SHA1 of partial file (1024 bytes)."""
         res = tools.compute_file_hash(self.filename, sha='sha1',
                                       bytes_to_read=1024)
         self.assertIn(res, (
@@ -665,7 +723,7 @@ class TestFileShaCalculator(TestCase):
         ))
 
     def test_sha224_complete_calculation(self) -> None:
-        """Test sha224 of complete file."""
+        """Test SHA224 of complete file."""
         res = tools.compute_file_hash(self.filename, sha='sha224')
         self.assertIn(res, (
             '3d350d9d9eca074bd299cb5ffe1b325a9f589b2bcd7ba1c033ab4d33',
@@ -673,7 +731,7 @@ class TestFileShaCalculator(TestCase):
         ))
 
     def test_sha224_partial_calculation(self) -> None:
-        """Test sha224 of partial file (1024 bytes)."""
+        """Test SHA224 of partial file (1024 bytes)."""
         res = tools.compute_file_hash(self.filename, sha='sha224',
                                       bytes_to_read=1024)
         self.assertIn(res, (
@@ -784,7 +842,6 @@ class TestIsIpAddress(TestCase):
         valid_addresses = (
             '0.0.0.0',
             '1.2.3.4',
-            '1.2.3.4',
             '192.168.0.1',
             '255.255.255.255',
         )
@@ -801,13 +858,21 @@ class TestIsIpAddress(TestCase):
             '0.0.0',
             '1.2.3.256',
             '1.2.3.-1',
+            '1.2.3.4.5',
             '0.0.0.a',
             'a.b.c.d',
+            '192.168.0.1\n',
+            '256.0.0.1',
         )
 
         for address in invalid_addresses:
             with self.subTest(ip_address=address):
                 self.assertFalse(is_ip_address(address))
+
+        address = '01.02.03.04'
+        with self.subTest(ip_address=address):
+            self.assertEqual(is_ip_address(address),
+                             PYTHON_VERSION < (3, 9, 5))
 
     def test_valid_ipv6_addresses(self) -> None:
         """Check with valid IPv6 addresses."""
@@ -815,6 +880,7 @@ class TestIsIpAddress(TestCase):
             'fe80:0000:0000:0000:0202:b3ff:fe1e:8329',
             'fe80:0:0:0:202:b3ff:fe1e:8329',
             'fe80::202:b3ff:fe1e:8329',
+            'fe80::',
             '::ffff:5.9.158.75',
             '::',
         )
@@ -830,7 +896,9 @@ class TestIsIpAddress(TestCase):
             '',
             ':',
             ':::',
+            '::ffff:999.999.999.999',
             '2001:db8::aaaa::1',
+            '2001:db8::1::1',
             'fe80:0000:0000:0000:0202:b3ff:fe1e: 8329',
             'fe80:0000:0000:0000:0202:b3ff:fe1e:829g',
         )
@@ -1026,7 +1094,7 @@ class TestTinyCache(TestCase):
         self.assertEqual(self.foo.read, 1)
         self.assertHasAttr(self.foo, '_foo')
         self.assertEqual(self.foo.foo(), 'foo')  # check cached value
-        self.assertEqual(self.foo.read, 1)  # bar() was called only once
+        self.assertEqual(self.foo.read, 1)  # foo() was called only once
         del self.foo._foo
         self.assertNotHasAttr(self.foo, '_foo')
         self.assertEqual(self.foo.foo(), 'foo')  # check computed value
@@ -1058,7 +1126,7 @@ class TestTinyCache(TestCase):
         self.assertEqual(self.foo.quux(force=True), 'quux')
         self.assertEqual(self.foo.read, 2)
 
-    def test_cached_with_argse(self) -> None:
+    def test_cached_with_args(self) -> None:
         """Test method with args."""
         self.assertEqual(self.foo.method_with_args(force=False),
                          'method_with_args')

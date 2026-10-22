@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
-"""Test pagegenerators module."""
 #
-# (C) Pywikibot team, 2009-2025
+# (C) Pywikibot team, 2009-2026
 #
 # Distributed under the terms of the MIT license.
+"""Test pagegenerators module."""
 from __future__ import annotations
 
 import calendar
 import datetime
-import logging
 import sys
 import unittest
 from contextlib import suppress
@@ -756,6 +755,9 @@ class DryFactoryGeneratorTest(TestCase):
         ns = set(range(16))
         ns.remove(2)
         self.assertTrue(ns.issubset(gf.namespaces))
+        self.assertNotIn(2, gf.namespaces)
+        self.assertNotIn(-1, gf.namespaces)
+        self.assertNotIn(-2, gf.namespaces)
 
     def test_two_excluded_namespaces(self) -> None:
         """Test two excluded namespaces."""
@@ -766,6 +768,10 @@ class DryFactoryGeneratorTest(TestCase):
         ns.remove(2)
         ns.remove(1)
         self.assertTrue(ns.issubset(gf.namespaces))
+        self.assertNotIn(2, gf.namespaces)
+        self.assertNotIn(1, gf.namespaces)
+        self.assertNotIn(-1, gf.namespaces)
+        self.assertNotIn(-2, gf.namespaces)
 
     def test_two_excluded_named_namespaces(self) -> None:
         """Test two excluded named namespaces."""
@@ -953,14 +959,29 @@ class TestFactoryGenerator(DefaultSiteTestCase):
         """Test allpages generator."""
         gf = pagegenerators.GeneratorFactory()
         self.assertTrue(gf.handle_arg('-start:!'))
+        self.assertIsNotEmpty(gf.gens)
+        self.assertIsNone(gf.gens[0])
         gf.handle_arg('-limit:10')
         gen = gf.getCombinedGenerator()
         self.assertIsNotNone(gen)
+        self.assertIsNotNone(gf.gens[0])
         pages = set(gen)
         self.assertLessEqual(len(pages), 10)
         for page in pages:
             self.assertIsInstance(page, pywikibot.Page)
             self.assertEqual(page.namespace(), 0)
+
+    def test_allpages_until(self) -> None:
+        """Test allpages generator."""
+        gf = pagegenerators.GeneratorFactory()
+        self.assertTrue(gf.handle_arg('-start:Python'))
+        self.assertTrue(gf.handle_arg('-until:Pywikibot'))
+        gen = gf.getCombinedGenerator()
+        self.assertIsNotNone(gen)
+        for page in gen:
+            self.assertIsInstance(page, pywikibot.Page)
+            self.assertEqual(page.namespace(), 0)
+            self.assertLessEqual(page.title(), 'Pywikibot')
 
     def test_allpages_ns(self) -> None:
         """Test allpages generator with namespace argument."""
@@ -1115,7 +1136,8 @@ class TestFactoryGenerator(DefaultSiteTestCase):
 
     def test_recentchanges_default(self) -> None:
         """Test recentchanges generator with default namespace setting."""
-        if self.site.family.name in ('wpbeta', 'wsbeta'):
+        if (self.site.family.name == 'wpbeta'
+                or self.site.sitename == 'wikisource:beta'):
             self.skipTest(
                 f'Skipping {self.site} due to too many autoblocked users')
         gf = pagegenerators.GeneratorFactory(site=self.site)
@@ -1448,7 +1470,8 @@ class TestWantedFactoryGenerator(DefaultSiteTestCase):
     def test_wanted_files(self) -> None:
         """Test wantedfiles generator."""
         if self.site.sitename == 'wowwiki:uk':
-            self.skipTest(f'skipping {self.site} due to T362384)')
+            self.skipTest(f'Skipping {self.site} due to T362384')
+
         self.gf.handle_arg('-wantedfiles:5')
         for page in self._generator_with_tests():
             self.assertIsInstance(page, pywikibot.Page)
@@ -1519,7 +1542,7 @@ class TestFactoryGeneratorWikibase(WikidataTestCase):
         """Test -searchitem with custom language specified."""
         gf = pagegenerators.GeneratorFactory(site=self.site)
         gf.handle_arg('-searchitem:en:abc')
-        gf.handle_arg('-limit:5')
+        gf.handle_arg('-limit:7')
         gen = gf.getCombinedGenerator()
         self.assertIsNotNone(gen)
         result = {page.title() for page in gen}
@@ -1645,19 +1668,13 @@ class EnWikipediaPageGeneratorIntersectTestCase(GeneratorIntersectTestCase,
         )
 
 
+@require_modules('requests_sse')
 class EventStreamsPageGeneratorTestCase(RecentChangesTestCase):
 
     """Test case for Live Recent Changes pagegenerator."""
 
-    @require_modules('requests_sse')
     def test_RC_pagegenerator_result(self) -> None:
         """Test RC pagegenerator."""
-        lgr = logging.getLogger('requests_sse.client')
-        lgr.setLevel(logging.DEBUG)
-        ch = logging.StreamHandler()
-        ch.setLevel(logging.DEBUG)
-        lgr.addHandler(ch)
-
         site = self.get_site()
         pagegenerator = pagegenerators.LiveRCPageGenerator(site,
                                                            total=self.length)

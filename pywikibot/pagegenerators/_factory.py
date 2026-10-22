@@ -1,14 +1,15 @@
-"""GeneratorFactory module which handles pagegenerators options."""
 #
-# (C) Pywikibot team, 2008-2025
+# (C) Pywikibot team, 2008-2026
 #
 # Distributed under the terms of the MIT license.
 #
+"""GeneratorFactory module which handles pagegenerators options."""
 from __future__ import annotations
 
 import itertools
 import re
 import sys
+from collections.abc import Callable, Iterable, Sequence
 from datetime import timedelta
 from functools import partial
 from itertools import zip_longest
@@ -16,7 +17,6 @@ from typing import TYPE_CHECKING
 
 import pywikibot
 from pywikibot import i18n
-from pywikibot.backports import Callable, Iterable, Sequence, removeprefix
 from pywikibot.bot import ShowingListOption
 from pywikibot.data import api
 from pywikibot.exceptions import (
@@ -95,13 +95,14 @@ class GeneratorFactory:
         """Initializer.
 
         :param site: Site for generator results
-        :param positional_arg_name: generator to use for positional
+        :param positional_arg_name: Generator to use for positional
             args, which do not begin with a hyphen
-        :param enabled_options: only enable options given by this
-            Iterable. This is priorized over disabled_options
-        :param disabled_options: disable these given options and let
+        :param enabled_options: Only enable options given by this
+            Iterable. This is prioritized over disabled_options
+        :param disabled_options: Disable these given options and let
             them be handled by scripts options handler
         """
+        #: List of generators provided by :meth:`getCombinedGenerator`.
         self.gens: list[Iterable[pywikibot.page.BasePage]] = []
         self._namespaces: list[str] | frozenset[Namespace] = []
         self.limit: int | None = None
@@ -120,7 +121,7 @@ class GeneratorFactory:
         self._sparql: str | None = None
         self.nopreload = False
         self._validate_options(enabled_options, disabled_options)
-
+        self._allpages_args = None
         self.is_preloading: bool | None = None
         """Return whether Page objects are preloaded. You may use this
         instance variable after :meth:`getCombinedGenerator` is called
@@ -133,7 +134,7 @@ class GeneratorFactory:
 
         Otherwise the value is undefined and gives None.
 
-        .. versionadded:: 7.3
+        .. version-added:: 7.3
         """
 
     def _validate_options(self,
@@ -187,9 +188,9 @@ class GeneratorFactory:
         which is lazy loaded to avoid being cached before the global
         arguments are handled.
 
-        :return: namespaces selected using arguments
-        :raises KeyError: a namespace identifier was not resolved
-        :raises TypeError: a namespace identifier has an inappropriate
+        :return: Namespaces selected using arguments
+        :raises KeyError: A namespace identifier was not resolved
+        :raises TypeError: A namespace identifier has an inappropriate
             type such as NoneType or bool
         """
         if isinstance(self._namespaces, list):
@@ -197,26 +198,49 @@ class GeneratorFactory:
                 self.site.namespaces.resolve(self._namespaces))
         return self._namespaces
 
+    @namespaces.deleter
+    def namespaces(self) -> None:
+        """Deleter of namespaces property."""
+        self._namespaces = frozenset()
+
     def getCombinedGenerator(self,  # noqa: N802
                              gen: OPT_GENERATOR_TYPE = None,
                              preload: bool = False) -> OPT_GENERATOR_TYPE:
         """Return the combination of all accumulated generators.
 
+        Most generators are selected by :ref:`Generator Options` and
+        stored in :attr:`gens` list.
+
         Only call this after all arguments have been parsed.
 
-        .. versionchanged:: 7.3
+        .. version-changed:: 7.3
            set the instance variable :attr:`is_preloading` to True or False.
-        .. versionchanged:: 8.0
+        .. version-changed:: 8.0
            if ``limit`` option is set and multiple generators are given,
            pages are yieded in a :func:`roundrobin
            <tools.itertools.roundrobin_generators>` way.
+        .. version-changed:: 11.3
+           If *preload* option is set, the preloading generators
+           :func:`pagegenerators.PreloadingGenerator` or
+           :func:`pagegenerators.DequePreloadingGenerator` are called
+           with the *quiet* option.
+           The generator specified by ``-start`` and ``-until`` is
+           evaluated lazily by this method.
 
         :param gen: Another generator to be combined with
-        :param preload: preload pages using PreloadingGenerator
+        :param preload: Preload pages using PreloadingGenerator
             unless self.nopreload is True
         """
         if gen:
             self.gens.insert(0, gen)
+
+        # Handle allpages where args are given by -start and -until
+        if self._allpages_args is not None:
+            apgen = self.site.allpages(**self._allpages_args)
+            if self.gens[0] is None:
+                self.gens[0] = apgen
+            else:
+                self.gens.append(apgen)
 
         for i, gen_item in enumerate(self.gens):
             if self.namespaces:
@@ -302,7 +326,7 @@ class GeneratorFactory:
                 preloadgen = pywikibot.pagegenerators.DequePreloadingGenerator
             else:
                 preloadgen = pywikibot.pagegenerators.PreloadingGenerator
-            dupfiltergen = preloadgen(dupfiltergen)
+            dupfiltergen = preloadgen(dupfiltergen, quiet=True)
 
         if self.articlefilter_list:
             dupfiltergen = RegexBodyFilterPageGenerator(
@@ -318,7 +342,7 @@ class GeneratorFactory:
                     ) -> tuple[pywikibot.Category, str | None]:
         """Return Category and start as defined by category.
 
-        :param category: category name with start parameter
+        :param category: Category name with start parameter
         """
         if not category:
             category = i18n.input('pywikibot-enter-category-name')
@@ -347,12 +371,17 @@ class GeneratorFactory:
                        gen_func: Callable | None = None) -> Any:
         """Return generator based on Category defined by category and gen_func.
 
-        :param category: category name with start parameter
-        :param recurse: if not False or 0, also iterate articles in
+        .. version-changed::11.1
+           *gen_func* is now called with the ``namespaces`` parameter
+           using the value from :attr:`namespaces`, because the namespace
+           option is prioritized in :meth:`handle_args`.
+
+        :param category: Category name with start parameter
+        :param recurse: If not False or 0, also iterate articles in
             subcategories. If an int, limit recursion to this number of
-            levels. (Example: recurse=1 will iterate articles in first-
-            level subcats, but no deeper.)
-        :param content: if True, retrieve the content of the current
+            levels. E.g. recurse=1 will iterate articles in first-level
+            subcats but no deeper.
+        :param content: If True, retrieve the content of the current
             version of each page (default False)
         """
         if gen_func is None:
@@ -360,10 +389,17 @@ class GeneratorFactory:
 
         cat, startfrom = self.getCategory(category)
 
-        return gen_func(cat,
-                        start=startfrom,
-                        recurse=recurse,
-                        content=content)
+        ns = self.namespaces or None
+        # reset namespaces property to avoid filtering by getCombinedGenerator
+        del self.namespaces
+
+        return gen_func(
+            cat,
+            start=startfrom,
+            recurse=recurse,
+            content=content,
+            namespaces=ns
+        )
 
     @staticmethod
     def _parse_log_events(
@@ -374,7 +410,7 @@ class GeneratorFactory:
     ) -> Iterable[pywikibot.page.BasePage] | None:
         """Parse the -logevent argument information.
 
-        .. deprecated:: 9.2
+        .. version-deprecated:: 9.2
            the *start* parameter as total amount of pages.
 
         :param logtype: A valid logtype
@@ -637,12 +673,13 @@ class GeneratorFactory:
             value = pywikibot.input('What namespace are you filtering on?')
         not_key = 'not:'
         if value.startswith(not_key):
-            value = removeprefix(value, not_key)
+            value = value.removeprefix(not_key)
             resolve = self.site.namespaces.resolve
             not_ns = set(resolve(value.split(',')))
+            special_ns = set(resolve([-1, -2]))
             if not self._namespaces:
                 self._namespaces = list(
-                    set(self.site.namespaces.values()) - not_ns)
+                    set(self.site.namespaces.values()) - not_ns - special_ns)
             else:
                 self._namespaces = list(
                     set(resolve(self._namespaces)) - not_ns)
@@ -745,14 +782,44 @@ class GeneratorFactory:
                                              source=self.site))
         return page.getReferences(only_template_inclusion=True)
 
-    def _handle_start(self, value: str) -> HANDLER_GEN_TYPE:
+    def _handle_start(self, value: str) -> Literal[True]:
         """Handle `-start` argument."""
         if not value:
             value = '!'
+
         firstpagelink = pywikibot.Link(value, self.site)
-        return self.site.allpages(
-            start=firstpagelink.title, namespace=firstpagelink.namespace,
-            filterredir=False)
+        self._allpages_args = self._allpages_args or {}
+        self._allpages_args.update(
+            start=firstpagelink.title,
+            filterredir=False,
+        )
+        self._allpages_args.setdefault('namespace', firstpagelink.namespace)
+
+        if not self.gens:
+            # Placeholder to indicate that a generator was specified.
+            # The actual generator will be inserted later by
+            # getCombinedGenerator().
+            self.gens.append(None)
+
+        return True
+
+    def _handle_until(self, value: str) -> Literal[True]:
+        """Handle `-until` argument."""
+        if not value:
+            value = '!'
+        lastpagelink = pywikibot.Link(value, self.site)
+        self._allpages_args = self._allpages_args or {}
+        self._allpages_args.update(
+            until=lastpagelink.title,
+            filterredir=False,
+        )
+        self._allpages_args.setdefault('namespace', lastpagelink.namespace)
+
+        if not self.gens:
+            # See comment in _handle_start.
+            self.gens.append(None)
+
+        return True
 
     def _handle_prefixindex(self, value: str) -> HANDLER_GEN_TYPE:
         """Handle `-prefixindex` argument."""
@@ -929,7 +996,7 @@ class GeneratorFactory:
     def _handle_redirect(self, value: str) -> Literal[True]:
         """Handle `-redirect` argument.
 
-        .. versionadded:: 8.5
+        .. version-added:: 8.5
         """
         if not value:
             # True by default
@@ -940,7 +1007,7 @@ class GeneratorFactory:
     def _handle_pagepile(self, value: str) -> HANDLER_GEN_TYPE:
         """Handle `-pagepile` argument.
 
-        .. versionadded:: 9.0
+        .. version-added:: 9.0
         """
         if not value.isnumeric():
             raise ValueError(
@@ -959,8 +1026,8 @@ class GeneratorFactory:
     def handle_args(self, args: Iterable[str]) -> list[str]:
         """Handle command line arguments and return the rest as a list.
 
-        .. versionadded:: 6.0
-        .. versionchanged:: 7.3
+        .. version-added:: 6.0
+        .. version-changed:: 7.3
            Prioritize -namespaces options to solve problems with several
            generators like -newpages/-random/-randomredirect/-linter
         """
@@ -979,8 +1046,19 @@ class GeneratorFactory:
         can try parsing the argument. Call getCombinedGenerator() after all
         arguments have been parsed to get the final output generator.
 
-        .. versionadded:: 6.0
+        .. version-added:: 6.0
            renamed from ``handleArg``
+        .. version-changed:: 11.3
+           The ``-start`` parameter no longer appends a generator to
+           :attr:`gens`. The generator is added lazily in
+           :meth:`getCombinedGenerator`
+        .. version-changed:: 11.4.1
+           If preleading ``not:`` directive is given, special namespaces
+           ``-1`` and ``-2`` are not included.
+           The ``-start`` or ``-until`` parameters appends a placeholder
+           to :attr:`gens`, which indicates that a generator was
+           specified.
+
 
         :param arg: Pywikibot argument consisting of -name:value
         :return: True if the argument supplied was recognised by the factory

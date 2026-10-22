@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Test generate_user_files script."""
 #
-# (C) Pywikibot team, 2018-2025
+# (C) Pywikibot team, 2018-2026
 #
 # Distributed under the terms of the MIT license.
 #
+"""Test generate_user_files script."""
 from __future__ import annotations
 
 import re
@@ -30,7 +30,7 @@ class TestGenerateUserFiles(TestCase):
     def test_base_names(self) -> None:
         """Test basename constants."""
         self.assertEndsWith(guf.USER_BASENAME, '.py')
-        self.assertEndsWith(guf.PASS_BASENAME, '.py')
+        self.assertEndsWith(guf.PASS_BASENAME, '.cfg')
 
     def test_config_test(self) -> None:
         """Test config text strings."""

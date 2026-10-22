@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+#
+# (C) Pywikibot team, 2004-2026
+#
+# Distributed under the terms of the MIT license.
+#
 """Script to resolve double redirects, and to delete broken redirects.
 
 Requires access to MediaWiki's maintenance pages or to a XML dump file.
@@ -21,8 +26,8 @@ where action can be one of these
                deletion if there is no speedy deletion template
                available.
 
-               .. versionchanged:: 10.3
-                  only tries to fix if the namspace of the source page
+               .. version-changed:: 10.3
+                  Only tries to fix if the namespace of the source page
                   is equal to the destination page.
 
 :both:         Both of the above. Retrieves redirect pages from live wiki,
@@ -55,9 +60,11 @@ and arguments can be:
                (see progress). Otherwise, ignored.
 
 -start:title   The starting page title in each namespace. Page need not exist.
+               Can only be used with ``both`` action.
 
 -until:title   The possible last page title in each namespace. Page needs not
-               exist.
+               exist. Can only be used with ``both`` action and together with
+               ``-start`` option.
 
 -limit:n       The maximum count of redirects to work upon. If omitted, there
                is no limit.
@@ -76,22 +83,18 @@ Furthermore the following options are provided:
 
 &params;
 """
-#
-# (C) Pywikibot team, 2004-2025
-#
-# Distributed under the terms of the MIT license.
-#
 from __future__ import annotations
 
 import datetime
+from collections.abc import Generator
 from contextlib import suppress
+from itertools import islice
 from textwrap import fill
 from typing import Any
 
 import pywikibot
 import pywikibot.data
 from pywikibot import i18n, pagegenerators, xmlreader
-from pywikibot.backports import Generator
 from pywikibot.bot import ExistingPageBot, OptionHandler, suggest_help
 from pywikibot.exceptions import (
     CircularRedirectError,
@@ -218,18 +221,18 @@ class RedirectGenerator(OptionHandler):
 
     def get_redirect_pages_via_api(self) -> Generator[pywikibot.Page]:
         """Yield Pages that are redirects."""
-        for ns in self.opt.namespaces:
-            gen = self.site.allpages(start=self.opt.start,
-                                     namespace=ns,
-                                     filterredir=True)
-            if self.opt.limit:
-                gen.set_maximum_items(self.opt.limit)
-            for p in gen:
-                done = (self.opt.until
-                        and p.title(with_ns=False) >= self.opt.until)
-                if done:
-                    return
-                yield p
+        pages = (
+            page
+            for ns in self.opt.namespaces
+            for page in self.site.allpages(
+                start=self.opt.start,
+                until=self.opt.until,
+                namespace=ns,
+                filterredir=True,
+                total=self.opt.limit
+            )
+        )
+        yield from islice(pages, self.opt.limit)
 
     def _next_redirect_group(self) -> Generator[list[pywikibot.Page]]:
         """Generator that yields batches of redirects as a list."""
@@ -250,7 +253,7 @@ class RedirectGenerator(OptionHandler):
     ) -> Generator[tuple[str, int | None, str, str | None]]:
         r"""Return a generator that yields tuples of data about redirect Pages.
 
-        .. versionchanged:: 7.0
+        .. version-changed:: 7.0
            only yield tuple if type of redirect is not 1 (normal redirect)
 
         The description of returned tuple items is as follows:
@@ -567,7 +570,7 @@ class RedirectRobot(ExistingPageBot):
                 return
 
             if redir_page.namespace() != movedTarget.namespace():
-                pywikibot.info(f'Namespace of {redir_page} is different'
+                pywikibot.info(f'Namespace of {redir_page} is different '
                                f'from target page {movedTarget}')
             elif redir_page == movedTarget:
                 pywikibot.info('Redirect to target page forms a redirect loop')
@@ -653,7 +656,7 @@ class RedirectRobot(ExistingPageBot):
                 return False  # do nothing
 
             pywikibot.info(
-                f'Skipping: Redirect target {new_redir} is not a  redirect.')
+                f'Skipping: Redirect target {new_redir} is not a redirect.')
 
         elif isinstance(error, SectionError):
             pywikibot.warning(
@@ -678,7 +681,7 @@ class RedirectRobot(ExistingPageBot):
             pywikibot.info('Skipping due to server error: No textarea found')
 
         else:
-            # all uncatched exceptions
+            # all uncaught exceptions
             # Note: elif statements are necessary above because all Errors
             # above derive from Exception class
             raise error
@@ -833,8 +836,10 @@ def main(*args: str) -> None:
         ' or '.join(source)) if len(source) > 1 else ''
 
     if action == 'both' and '-fullscan' in source:
-        problem += (' You can only use either -fullscan together with '
-                    "broken/double action or 'both' action")
+        problem += (
+            ' The -fullscan option cannot be used with the "both" action. '
+            'Use -fullscan with "broken" or "double" actions only.'
+        )
 
     if suggest_help(additional_text=fill(problem),
                     unknown_parameters=unknown,
@@ -847,8 +852,8 @@ def main(*args: str) -> None:
             gen_options['namespaces'] = gen_factory.namespaces
         gen = RedirectGenerator(action, **gen_options)
 
-    if gen_factory.gens \
-       or action != 'both' and source not in ('-fullscan', '-xml'):
+    if gen_factory.gens or action != 'both' \
+       and next(iter(source), None) not in ('-fullscan', '-xml'):
         gen = gen_factory.getCombinedGenerator(gen=gen)
 
     bot = RedirectRobot(action, generator=gen, **options)

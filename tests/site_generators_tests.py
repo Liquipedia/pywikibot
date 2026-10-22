@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Tests for generators of the site module."""
 #
-# (C) Pywikibot team, 2008-2025
+# (C) Pywikibot team, 2008-2026
 #
 # Distributed under the terms of the MIT license.
 #
+"""Tests for generators of the site module."""
 from __future__ import annotations
 
 import unittest
@@ -24,7 +24,7 @@ from pywikibot.exceptions import (
 from pywikibot.tools import suppress_warnings
 from tests import WARN_SITE_CODE, unittest_print
 from tests.aspects import DefaultSiteTestCase, DeprecationTestCase, TestCase
-from tests.utils import skipping
+from tests.utils import expected_failure_if, skipping
 
 
 global_expected_params = {
@@ -208,8 +208,9 @@ class TestSiteGenerators(DefaultSiteTestCase):
 
     def test_pagelanglinks(self) -> None:
         """Test Site.pagelanglinks."""
-        for ll in self.site.pagelanglinks(self.mainpage):
-            self.assertIsInstance(ll, pywikibot.Link)
+        with suppress_warnings(WARN_SITE_CODE, category=UserWarning):
+            for ll in self.site.pagelanglinks(self.mainpage):
+                self.assertIsInstance(ll, pywikibot.Link)
 
     def test_page_extlinks(self) -> None:
         """Test Site.extlinks."""
@@ -284,6 +285,21 @@ class TestSiteGenerators(DefaultSiteTestCase):
         for page in mysite.allpages(filterredir=False, total=5):
             if self.validate_page(page):
                 self.assertFalse(page.isRedirectPage())
+
+    def test_allpages_until(self) -> None:
+        """Test the site.allpages() method with until option."""
+        start, until = 'Python', 'Pywiki'
+        fwd = list(self.site.allpages(start=start, until=until))
+        for page in fwd:
+            if self.validate_page(page):
+                self.assertLessEqual(page.title(), until)
+
+        rev = list(self.site.allpages(start=until, until=start, reverse=True))
+        for page in rev:
+            if self.validate_page(page):
+                self.assertLessEqual(page.title(), until)
+
+        self.assertLength(fwd, rev)
 
     def test_allpages_langlinks_enabled(self) -> None:
         """Test allpages with langlinks enabled."""
@@ -672,6 +688,7 @@ class TestSiteGeneratorsUsers(DefaultSiteTestCase):
             self.assertIn('registration', botuser)
             self.assertIn('bot', botuser['groups'])
 
+    @expected_failure_if(pywikibot.config.family == 'wowwiki')  # T429874
     def test_allusers(self) -> None:
         """Test the site.allusers() method."""
         mysite = self.get_site()
@@ -1086,6 +1103,10 @@ class SearchTestCase(DefaultSiteTestCase):
             if e.code == 'gsrsearch-text-disabled':
                 self.skipTest(
                     'gsrsearch is disabled on site {mysite}:\n{e!r}')
+            if (e.code == 'cirrussearch-backend-error'
+                    and mysite.family.name == 'wpbeta'):  # T426529
+                self.skipTest(
+                    f'cirrussearch-backend-error on site {mysite}:\n{e!r}')
             raise
 
     def test_search_where_title(self) -> None:
@@ -1100,9 +1121,16 @@ class SearchTestCase(DefaultSiteTestCase):
             gsrwhat=['title'],
         )
         self.assertEqual(search_gen.request._params, expected_params)
-        for hit in search_gen:
-            self.assertIsInstance(hit, pywikibot.Page)
-            self.assertEqual(hit.namespace(), 0)
+        try:
+            for hit in search_gen:
+                self.assertIsInstance(hit, pywikibot.Page)
+                self.assertEqual(hit.namespace(), 0)
+        except APIError as e:  # pragma: no cover
+            if (e.code == 'cirrussearch-backend-error'
+                    and self.site.family.name == 'wpbeta'):  # T426529
+                self.skipTest(
+                    f'cirrussearch-backend-error on site {self.site}:\n{e!r}')
+            raise
 
 
 class TestUserContribsAsUser(DefaultSiteTestCase):
@@ -1200,13 +1228,13 @@ class TestUserContribsWithoutUser(DefaultSiteTestCase):
         mysite = self.get_site()
         start = '2008-10-08T03:05:07Z'
         for contrib in mysite.usercontribs(
-                userprefix='Brion',
+                userprefix='Brooke',
                 start=pywikibot.Timestamp.fromISOformat(start),
                 total=5, reverse=True):
             self.assertGreaterEqual(contrib['timestamp'], start)
 
         for contrib in mysite.usercontribs(
-                userprefix='Brion',
+                userprefix='Brooke',
                 end=pywikibot.Timestamp.fromISOformat('2008-10-09T04:06:08Z'),
                 total=5, reverse=True):
             self.assertLessEqual(contrib['timestamp'], '2008-10-09T04:06:08Z')
@@ -1500,7 +1528,7 @@ class SiteWatchlistRevsTestCase(DefaultSiteTestCase):
 
 class TestUserList(DefaultSiteTestCase):
 
-    """Test usernames Jimbo Wales, Brion VIBBER and Tim Starling."""
+    """Test usernames Jimbo Wales, Brooke Vibber and Tim Starling."""
 
     cached = True
 
@@ -1783,7 +1811,7 @@ class TestBacklinks(TestCase):
         self.assertLength(self.nofollow, 1)
 
     def test_backlinks_redirects_status(self) -> None:
-        """Test backlinks redirects statur."""
+        """Test backlinks redirects status."""
         for page in self.backlinks:
             self.assertTrue(page.isRedirectPage())
         for page in self.references:

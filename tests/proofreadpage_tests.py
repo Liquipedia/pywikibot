@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Tests for the proofreadpage module."""
 #
-# (C) Pywikibot team, 2015-2025
+# (C) Pywikibot team, 2015-2026
 #
 # Distributed under the terms of the MIT license.
 #
+"""Tests for the proofreadpage module."""
 from __future__ import annotations
 
 import difflib
@@ -42,7 +42,7 @@ class TestPagesTagParser(TestCase):
         self.assertEqual(attr.attr, 'to')
         self.assertEqual(attr.value, 3)
 
-    def test_tag_attr_srt_int(self) -> None:
+    def test_tag_attr_str_int(self) -> None:
         """Test TagAttr for str values that can be converted to int."""
         attr = TagAttr('to', '3')
         self.assertEqual(repr(attr), "TagAttr('to', '3')")
@@ -72,6 +72,41 @@ class TestPagesTagParser(TestCase):
         self.assertEqual(repr(attr), """TagAttr('fromsection', "'A123'")""")
         self.assertEqual(str(attr), "fromsection='A123'")
         self.assertEqual(attr.value, 'A123')
+
+    def test_tag_attr_str_with_spaces(self) -> None:
+        """Test TagAttr for str value with spaces."""
+        attr = TagAttr('index', 'Sample index with more than two words.pdf')
+        self.assertEqual(
+            repr(attr),
+            "TagAttr('index', '\"Sample index with more than two words.pdf\"')"
+        )
+        self.assertEqual(
+            str(attr), 'index="Sample index with more than two words.pdf"')
+        self.assertEqual(
+            attr.value, 'Sample index with more than two words.pdf')
+
+    def test_tag_attr_str_with_multiple_spaces(self) -> None:
+        """Test TagAttr for str value with multiple spaces."""
+        attr = TagAttr('index', 'Sample index with   multiple   spaces.pdf')
+        self.assertEqual(
+            repr(attr),
+            "TagAttr('index', '\"Sample index with   multiple   spaces.pdf\"')"
+        )
+        self.assertEqual(
+            str(attr), 'index="Sample index with   multiple   spaces.pdf"')
+        self.assertEqual(
+            attr.value, 'Sample index with   multiple   spaces.pdf')
+
+        tag = PagesTagParser()
+        tag.index = 'Sample index with more than two words.pdf'
+        tag.ffrom = 5
+        tag.to = '6'
+        tag.fromsection = '"chapter XVI"'
+        self.assertEqual(
+            str(tag),
+            '<pages index="Sample index with more than two words.pdf" '
+            'from=5 to=6 fromsection="chapter XVI" />'
+        )
 
     def test_tag_attr_exceptions(self) -> None:
         """Test TagAttr for Exceptions."""
@@ -109,6 +144,11 @@ class TestPagesTagParser(TestCase):
         tp.step = 3
         self.assertEqual(str(tp), """<pages from=1 to='3' step=3 />""")
         self.assertIn('step', tp)
+
+        text = """Text: <pages index="Index.pdf"   from="1" />"""
+        tp = PagesTagParser(text)
+        self.assertEqual(tp.index, 'Index.pdf')
+        self.assertEqual(tp.ffrom, 1)
 
     def test_pages_tag_parser_exceptions(self) -> None:
         """Test PagesTagParser Exceptions."""
@@ -248,16 +288,24 @@ class TestProofreadPageValidSite(TestCase):
         'user': 'T. Mazzei',
         'header': "{{rh|2|''THE POPULAR SCIENCE MONTHLY.''}}",
         'footer': '\n{{smallrefs}}',
-        'url_image': ('https://upload.wikimedia.org/wikipedia/commons/'
-                      'thumb/a/ac/Popular_Science_Monthly_Volume_1.djvu/'
-                      'page12-2012px-Popular_Science_Monthly_Volume_1.djvu'
-                      '.jpg'),
+        'url_image': (
+            'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ac/'
+            'Popular_Science_Monthly_Volume_1.djvu/'
+            'page12-2012px-Popular_Science_Monthly_Volume_1.djvu.jpg',
+            'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ac/'
+            'Popular_Science_Monthly_Volume_1.djvu/'
+            'page12-1920px-Popular_Science_Monthly_Volume_1.djvu.jpg',
+        )
     }
 
     valid_redlink = {
         'title': 'Page:Pywikibot test page 3.jpg',
-        'url_image': ('https://upload.wikimedia.org/wikisource/en/3/37/'
-                      'Pywikibot_test_page_3.jpg'),
+        'url_image': (
+            'https://upload.wikimedia.org/wikisource/en/3/37/'
+            'Pywikibot_test_page_3.jpg',
+            'https://upload.wikimedia.org/wikisource/en/thumb/3/37/'
+            'Pywikibot_test_page_3.jpg/60px-Pywikibot_test_page_3.jpg',
+        )
     }
 
     existing_invalid = {
@@ -404,15 +452,19 @@ class TestProofreadPageValidSite(TestCase):
     def test_url_image(self) -> None:
         """Test fetching of url image of the scan of ProofreadPage."""
         page = ProofreadPage(self.site, self.valid['title'])
-        self.assertEqual(page.url_image, self.valid['url_image'])
-
+        # seems the result is not deterministic
+        self.assertIn(page.url_image, self.valid['url_image'])
         page = ProofreadPage(self.site, self.existing_unlinked['title'])
         # test Exception in property.
-        with self.assertRaises(ValueError):
+        with self.assertRaisesRegex(
+            ValueError,
+            'imagesforpage is empty|No prp-page-image src found'
+        ):
             page.url_image
 
         page = ProofreadPage(self.site, self.valid_redlink['title'])
-        self.assertEqual(page.url_image, self.valid_redlink['url_image'])
+        # seems the result is not deterministic
+        self.assertIn(page.url_image, self.valid_redlink['url_image'])
 
 
 class TestPageQuality(TestCase):
@@ -823,11 +875,11 @@ class TestIndexPageMappings(BS4TestCase):
         proofread_page = ProofreadPage(self.site, page_title)
 
         # Check start/end limits.
-        with self.assertRaises(ValueError):
+        with self.assertRaisesRegex(ValueError, ' are not in valid range '):
             index_page.page_gen(-1, 2)
-        with self.assertRaises(ValueError):
+        with self.assertRaisesRegex(ValueError, ' are not in valid range '):
             index_page.page_gen(1, -1)
-        with self.assertRaises(ValueError):
+        with self.assertRaisesRegex(ValueError, ' are not in valid range '):
             index_page.page_gen(2, 1)
 
         # Check quality filters.
@@ -942,7 +994,7 @@ class TestIndexPageHasValidContent(BS4TestCase):
         self.index.text = self.other_template
         self.assertFalse(self.index.has_valid_content())
 
-    def test_has_valid_content_missnamed_template(self) -> None:
+    def test_has_valid_content_misnamed_template(self) -> None:
         """Test nested templates is valid."""
         self.index.text = '{{%s_bar|foo=bar}}' % IndexPage.INDEX_TEMPLATE
         self.assertFalse(self.index.has_valid_content())

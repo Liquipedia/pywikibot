@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
-"""Test noreferences bot module."""
 #
-# (C) Pywikibot team, 2018-2022
+# (C) Pywikibot team, 2018-2026
 #
 # Distributed under the terms of the MIT license.
 #
+"""Test noreferences bot module."""
 from __future__ import annotations
+
+import unittest
 
 import pywikibot
 from scripts.noreferences import NoReferencesBot
-from tests.aspects import TestCase, unittest
+from tests.aspects import TestCase
 
 
 class TestAddingReferences(TestCase):
@@ -38,6 +40,17 @@ class TestAddingReferences(TestCase):
         page.text = '\n== Reference ==\n{{Překlad|en|Baz|123456}}'
         new_text = bot.addReferences(page.text)
         expected = page.text + '\n<references />\n'
+        self.assertEqual(new_text, expected)
+
+    def test_add_under_comments(self) -> None:
+        """Test adding references section under comments in section."""
+        page = pywikibot.Page(self.site, 'foo')
+        bot = NoReferencesBot()
+        bot.site = self.site
+        page.text = '\n== Reference ==\n<!-- comment -->\nSome text'
+        new_text = bot.addReferences(page.text)
+        expected = ('\n== Reference ==\n<!-- comment -->\n<references />\n'
+                    '\nSome text')
         self.assertEqual(new_text, expected)
 
 

@@ -1,19 +1,20 @@
 #!/usr/bin/env python3
-"""Tests for the User page."""
 #
-# (C) Pywikibot team, 2016-2024
+# (C) Pywikibot team, 2016-2026
 #
 # Distributed under the terms of the MIT license.
 #
+"""Tests for the User page."""
 from __future__ import annotations
 
+import unittest
 from contextlib import suppress
 from unittest.mock import patch
 
 import pywikibot
 from pywikibot import Page, Timestamp, User
 from pywikibot.exceptions import AutoblockUserError
-from tests.aspects import DefaultSiteTestCase, TestCase, unittest
+from tests.aspects import DefaultSiteTestCase, TestCase
 
 
 class TestUserClass(TestCase):
@@ -32,6 +33,8 @@ class TestUserClass(TestCase):
         self.assertEqual(user.gender(), 'unknown')
         self.assertFalse(user.is_thankable)
         self.assertIn(prop, user.getprops())
+        self.assertFalse(user.is_temporary())
+        self.assertFalse(user.is_named(), f'{user} is a named user')
 
     def test_anonymous_user(self) -> None:
         """Test registered user."""
@@ -51,19 +54,24 @@ class TestUserClass(TestCase):
         self._tests_unregistered_user(user)
         self.assertFalse(user.isAnonymous())
 
-    def test_registered_user(self) -> None:
+    def _test_registered_user(self, user) -> None:
         """Test registered user."""
-        user = User(self.site, 'Xqt')
         self.assertEqual(user.title(with_ns=False), user.username)
         self.assertTrue(user.isRegistered())
         self.assertFalse(user.isAnonymous())
+        self.assertEqual(user.gender(), 'unknown')
+        self.assertIn('userid', user.getprops())
+
+    def test_registered_user(self) -> None:
+        """Test registered user."""
+        user = User(self.site, 'Xqt')
+        self._test_registered_user(user)
+        self.assertTrue(user.is_named())
         self.assertIsInstance(user.registration(), pywikibot.Timestamp)
         self.assertGreater(user.editCount(), 0)
         self.assertFalse(user.is_blocked())
         self.assertFalse(user.is_locked())
         self.assertTrue(user.isEmailable())
-        self.assertEqual(user.gender(), 'unknown')
-        self.assertIn('userid', user.getprops())
         self.assertEqual(user.getprops()['userid'], 287832)
         self.assertEqual(user.pageid, 6927779)
         self.assertEqual(user.getUserPage(),
@@ -92,8 +100,8 @@ class TestUserClass(TestCase):
     def test_registered_user_without_timestamp(self) -> None:
         """Test registered user when registration timestamp is None."""
         user = User(self.site, 'Ulfb')
-        self.assertTrue(user.isRegistered())
-        self.assertFalse(user.isAnonymous())
+        self._test_registered_user(user)
+        self.assertTrue(user.is_named())
         self.assertIsNone(user.registration())
         self.assertIsNone(user.getprops()['registration'])
         self.assertGreater(user.editCount(), 0)
@@ -101,11 +109,24 @@ class TestUserClass(TestCase):
         self.assertIn('userid', user.getprops())
         self.assertTrue(user.is_thankable)
 
+    def test_temporary_user(self) -> None:
+        """Test registered user."""
+        user = User(self.site, '~2026-99999-1')
+        self._test_registered_user(user)
+        self.assertTrue(user.is_temporary())
+        self.assertFalse(user.is_named())
+        self.assertIn('temp', user.groups())
+        self.assertTrue(user.temp_expired())
+        self.assertFalse(user.isEmailable())
+        self.assertIsInstance(user.registration(), pywikibot.Timestamp)
+
     def test_female_user(self) -> None:
         """Test female user."""
         user = User(self.site, 'Catrin')
         self.assertTrue(user.isRegistered())
         self.assertFalse(user.isAnonymous())
+        self.assertTrue(user.is_named())
+        self.assertFalse(user.is_temporary())
         self.assertGreater(user.editCount(), 0)
         self.assertEqual(user.gender(), 'female')
         self.assertIn('userid', user.getprops())
@@ -127,6 +148,8 @@ class TestUserClass(TestCase):
         self.assertEqual(user.title(with_ns=False), user.username[1:])
         self.assertFalse(user.isRegistered())
         self.assertFalse(user.isAnonymous())
+        self.assertFalse(user.is_named())
+        self.assertFalse(user.is_temporary())
         self.assertIsNone(user.registration())
         self.assertFalse(user.isEmailable())
         self.assertIn('invalid', user.getprops())
@@ -166,6 +189,44 @@ class TestUserClass(TestCase):
         """Test global lock."""
         user = User(self.site, 'TonjaHeritage2')
         self.assertTrue(user.is_locked())
+
+    def test_block_info(self) -> None:
+        """Test block information methods."""
+        # 1. Test partial block detection
+        user = User(self.site, 'PartialUser')
+        user._userprops = {
+            'userid': 1234,
+            'blockid': 12345,
+            'blockpartial': '',
+            'blockreason': 'Test partial'
+        }
+
+        self.assertTrue(user.is_partial_blocked())
+        info = user.get_block_info()
+        self.assertIsNotNone(info)
+        self.assertIn('blockpartial', info)
+        self.assertEqual(info['blockid'], 12345)
+
+        # 2. Test full block (not partial)
+        user = User(self.site, 'FullUser')
+        user._userprops = {
+            'userid': 5678,
+            'blockid': 67890,
+            'blockreason': 'Test full'
+        }
+
+        self.assertFalse(user.is_partial_blocked())
+        info = user.get_block_info()
+        self.assertIsNotNone(info)
+        self.assertNotIn('blockpartial', info)
+        self.assertEqual(info['blockid'], 67890)
+
+        # 3. Test unblocked user
+        user = User(self.site, 'NormalUser')
+        user._userprops = {'userid': 999}
+
+        self.assertFalse(user.is_partial_blocked())
+        self.assertIsNone(user.get_block_info())
 
 
 class TestUserMethods(DefaultSiteTestCase):
